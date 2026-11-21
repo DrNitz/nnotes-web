@@ -3,6 +3,7 @@ import { Search, Trash2, X } from 'lucide-react';
 import { deleteDocument, listDocuments, loadDocument } from './lib/storage';
 import { parseNNote } from './lib/nnote';
 import { useEditor } from './store/editor';
+import { useT } from './i18n';
 
 interface Row { id: string; name: string; updatedAt: number }
 
@@ -10,6 +11,7 @@ export function DocumentSwitcher({ onClose }: { onClose: () => void }) {
   const [docs, setDocs] = useState<Row[]>([]);
   const [query, setQuery] = useState('');
   const load = useEditor((s) => s.loadDocument);
+  const t = useT();
 
   const refresh = () => listDocuments().then((all) => setDocs(all.map(({ id, name, updatedAt }) => ({ id, name, updatedAt }))));
   useEffect(() => { void refresh(); }, []);
@@ -27,12 +29,12 @@ export function DocumentSwitcher({ onClose }: { onClose: () => void }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>Document switcher</h2>
+          <h2>{t('docSwitcher')}</h2>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
         <label className="search-field">
           <Search size={16} />
-          <input autoFocus placeholder="Search notes…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input autoFocus placeholder={t('searchNotes')} value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
         <div className="modal-list">
           {filtered.map((d) => (
@@ -44,7 +46,7 @@ export function DocumentSwitcher({ onClose }: { onClose: () => void }) {
               <button className="icon-btn" title="Delete" onClick={async () => { await deleteDocument(d.id); refresh(); }}><Trash2 size={15} /></button>
             </div>
           ))}
-          {!filtered.length && <div className="panel-note">No saved notes match “{query}”.</div>}
+          {!filtered.length && <div className="panel-note">{t('noNotes')} “{query}”.</div>}
         </div>
       </div>
     </div>

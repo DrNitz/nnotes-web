@@ -75,6 +75,14 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   background: var(--accent-dim); color: var(--accent); border-color: rgba(0, 230, 118, .25);
 }
 .zoom-label { min-width: 44px; text-align: center; font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.lang-select {
+  max-width: 92px; padding: 6px 6px; margin-right: 4px; border: 1px solid var(--border);
+  border-radius: 7px; background: var(--panel-2); color: var(--text); font-size: 11px; outline: none;
+}
+
+[dir='rtl'] .topbar, [dir='rtl'] .workspace-row, [dir='rtl'] .statusbar { direction: rtl; }
+[dir='rtl'] .brand, [dir='rtl'] .tool-panel, [dir='rtl'] .page-panel { direction: rtl; }
+[dir='rtl'] .panel-heading, [dir='rtl'] .statusbar { text-align: right; }
 
 .workspace { flex: 1; display: flex; min-height: 0; }
 .workspace.dock-top, .workspace.dock-bottom { flex-direction: column; }

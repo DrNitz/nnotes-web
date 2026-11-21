@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pause, Play, RotateCcw, Sparkles, X } from 'lucide-react';
+import { useT } from './i18n';
 
 const QUOTES = [
   'Small steps every day add up to big results.',
@@ -37,6 +38,7 @@ export function Studio({ onClose }: { onClose: () => void }) {
   const [streak] = useState(loadStreak);
   const [mascot, setMascot] = useState(localStorage.getItem('nnotes-mascot') ?? '🩺');
   const interval = useRef<number | null>(null);
+  const t = useT();
 
   useEffect(() => {
     localStorage.setItem('nnotes-last-active', dayKey());
@@ -83,7 +85,7 @@ export function Studio({ onClose }: { onClose: () => void }) {
           <div className="mascot">{mascot}</div>
           <div>
             <div className="quote">“{quote}”</div>
-            <div className="streak">🔥 {streak} day streak</div>
+            <div className="streak">🔥 {streak} {t('streak')}</div>
           </div>
         </div>
 
@@ -94,8 +96,8 @@ export function Studio({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="timer-toggles">
-          <button className={mode === 'work' ? 'active' : ''} onClick={() => reset('work', workMin)}>Focus</button>
-          <button className={mode === 'rest' ? 'active' : ''} onClick={() => reset('rest', restMin)}>Break</button>
+          <button className={mode === 'work' ? 'active' : ''} onClick={() => reset('work', workMin)}>{t('focus')}</button>
+          <button className={mode === 'rest' ? 'active' : ''} onClick={() => reset('rest', restMin)}>{t('break')}</button>
         </div>
         <div className="timer-display">{mm}:{ss}</div>
         <div className="timer-controls">

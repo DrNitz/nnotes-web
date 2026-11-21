@@ -11,13 +11,14 @@ import { normalizeConfig } from './lib/toolDefaults';
 import { cloneItem, makeGroup, makeImage } from './lib/items';
 import { assetUrl } from './store/editor';
 import { parseNNote, serializeNNote } from './lib/nnote';
-import { listDocuments, loadDocument, saveDocument } from './lib/storage';
+import { listDocuments, loadDocument, saveDocument, setPref } from './lib/storage';
 import { useEditor, type ThemeMode } from './store/editor';
 import { CanvasStage } from './canvas/CanvasStage';
 import { ObjectEditor } from './canvas/ObjectEditor';
 import { Minimap } from './canvas/Minimap';
 import { DocumentSwitcher } from './DocumentSwitcher';
 import { Studio } from './Studio';
+import { LANGS, toolName, useT, type Lang } from './i18n';
 
 const INK_TOOLS: { id: EditorTool; label: string; icon: typeof Pen }[] = [
   { id: 'pen', label: 'Ballpoint pen', icon: Pen },
@@ -57,9 +58,11 @@ const SHAPE_KINDS: ShapeKind[] = [
 const STICKY_STYLES: StickyStyle[] = ['lined', 'grid', 'blank', 'checklist'];
 const TAPE_PATTERNS: TapePattern[] = ['translucent', 'stripes', 'sparkle', 'solid', 'dots', 'grid'];
 
-function ToolButton({ id, label, icon: Icon }: { id: EditorTool; label: string; icon: typeof Pen }) {
+function ToolButton({ id, icon: Icon }: { id: EditorTool; icon: typeof Pen }) {
   const active = useEditor((s) => s.tool === id);
   const setTool = useEditor((s) => s.setTool);
+  const lang = useEditor((s) => s.lang);
+  const label = toolName(lang as Lang, id);
   return (
     <button className={`tool-btn ${active ? 'active' : ''}`} title={label} aria-label={label} onClick={() => setTool(id)}>
       <Icon size={19} strokeWidth={1.8} />
@@ -85,35 +88,42 @@ function TopBar({ onSave, onExport, onOpen, onImportPdf, onExportPdf, split, set
   const zoom = useEditor((s) => s.zoom);
   const setZoom = useEditor((s) => s.setZoom);
 
+  const t = useT();
+  const lang = useEditor((s) => s.lang);
+  const setLang = useEditor((s) => s.setLang);
   const nextTheme = (): ThemeMode => theme === 'dark' ? 'oled' : theme === 'oled' ? 'light' : 'dark';
   const ThemeIcon = theme === 'light' ? Sun : Moon;
 
   return (
     <header className="topbar">
       <div className="brand"><span className="brand-mark">N</span><span>Nnotes <b>Web</b></span></div>
-      <input className="doc-name" value={name} onChange={(e) => setDocName(e.target.value)} aria-label="Document name" />
+      <input className="doc-name" value={name} onChange={(e) => setDocName(e.target.value)} aria-label={t('untitled')} />
       {dirty && <span className="dirty-dot" title="Unsaved changes" />}
       <div className="spacer" />
       <div className="btn-group">
-        <button className="icon-btn" title="Undo" disabled={!canUndo} onClick={undo}><Undo2 size={17} /></button>
-        <button className="icon-btn" title="Redo" disabled={!canRedo} onClick={redo}><Redo2 size={17} /></button>
+        <button className="icon-btn" title={t('undo')} disabled={!canUndo} onClick={undo}><Undo2 size={17} /></button>
+        <button className="icon-btn" title={t('redo')} disabled={!canRedo} onClick={redo}><Redo2 size={17} /></button>
       </div>
       <div className="btn-group">
-        <button className="icon-btn" title="Zoom out" onClick={() => setZoom(zoom / 1.25)}><ZoomOut size={17} /></button>
+        <button className="icon-btn" title={t('zoomOut')} onClick={() => setZoom(zoom / 1.25)}><ZoomOut size={17} /></button>
         <span className="zoom-label">{Math.round(zoom * 100)}%</span>
-        <button className="icon-btn" title="Zoom in" onClick={() => setZoom(zoom * 1.25)}><ZoomIn size={17} /></button>
+        <button className="icon-btn" title={t('zoomIn')} onClick={() => setZoom(zoom * 1.25)}><ZoomIn size={17} /></button>
       </div>
       <div className="btn-group">
-        <button className="icon-btn" title="Document switcher" onClick={onSwitchDocs}><Search size={17} /></button>
-        <button className="icon-btn" title="New note" onClick={newDocument}><FilePlus2 size={17} /></button>
-        <button className="icon-btn" title="Open .nnote" onClick={onOpen}><FolderOpen size={17} /></button>
-        <button className={`icon-btn ${split ? 'active' : ''}`} title="Toggle PDF split view" onClick={() => setSplit(!split)}><LayoutPanelLeft size={17} /></button>
-        <button className="icon-btn" title="Import PDF" onClick={onImportPdf}><FolderOpen size={17} /></button>
-        <button className="icon-btn" title="Export PDF" onClick={onExportPdf}><Download size={17} /></button>
-        <button className="icon-btn" title="Save to browser" onClick={onSave}><Save size={17} /></button>
-        <button className="icon-btn" title="Export .nnote" onClick={onExport}><Download size={17} /></button>
-        <button className="icon-btn" title="Studio · focus & streak" onClick={onStudio}><Sparkles size={17} /></button>
-        <button className="icon-btn" title="Switch theme" onClick={() => setTheme(nextTheme())}><ThemeIcon size={17} /></button>
+        <select className="lang-select" title={t('language')} aria-label={t('language')} value={lang}
+          onChange={(e) => { setLang(e.target.value); void setPref('lang', e.target.value); }}>
+          {(Object.keys(LANGS) as Lang[]).map((l) => <option key={l} value={l}>{LANGS[l]}</option>)}
+        </select>
+        <button className="icon-btn" title={t('docSwitcher')} onClick={onSwitchDocs}><Search size={17} /></button>
+        <button className="icon-btn" title={t('newNote')} onClick={newDocument}><FilePlus2 size={17} /></button>
+        <button className="icon-btn" title={t('openNote')} onClick={onOpen}><FolderOpen size={17} /></button>
+        <button className={`icon-btn ${split ? 'active' : ''}`} title={t('pdfReference')} onClick={() => setSplit(!split)}><LayoutPanelLeft size={17} /></button>
+        <button className="icon-btn" title={t('importPdf')} onClick={onImportPdf}><FolderOpen size={17} /></button>
+        <button className="icon-btn" title={t('exportPdf')} onClick={onExportPdf}><Download size={17} /></button>
+        <button className="icon-btn" title={t('save')} onClick={onSave}><Save size={17} /></button>
+        <button className="icon-btn" title={t('exportNnote')} onClick={onExport}><Download size={17} /></button>
+        <button className="icon-btn" title={t('studio')} onClick={onStudio}><Sparkles size={17} /></button>
+        <button className="icon-btn" title={t('theme')} onClick={() => setTheme(nextTheme())}><ThemeIcon size={17} /></button>
       </div>
     </header>
   );
@@ -140,20 +150,21 @@ function ToolPanel() {
   const setScribbleToErase = useEditor((s) => s.setScribbleToErase);
   const ruler = useEditor((s) => s.ruler);
   const setRuler = useEditor((s) => s.setRuler);
+  const t = useT();
 
   const patch = (p: Partial<ToolConfig>) => setConfig(tool, p);
   const isInk = ['pen', 'pencil', 'dashed', 'calligraphy', 'speed', 'taper', 'highlighter'].includes(tool);
 
   return (
     <aside className="tool-panel">
-      <div className="panel-heading">TOOLS</div>
+      <div className="panel-heading">{t('tools')}</div>
       <div className="tool-grid">
         {INK_TOOLS.map((t) => <ToolButton key={t.id} {...t} />)}
         <div className="tool-divider" />
         {OTHER_TOOLS.map((t) => <ToolButton key={t.id} {...t} />)}
       </div>
 
-      <div className="panel-heading">DOCK</div>
+      <div className="panel-heading">{t('dock')}</div>
       <div className="dock-grid">
         <button className={`icon-btn ${dock === 'left' ? 'active' : ''}`} title="Dock left" onClick={() => setDock('left')}><LayoutPanelLeft size={16} /></button>
         <button className={`icon-btn ${dock === 'right' ? 'active' : ''}`} title="Dock right" onClick={() => setDock('right')}><PanelRight size={16} /></button>
@@ -163,7 +174,7 @@ function ToolPanel() {
 
       {isInk && (
         <>
-          <div className="panel-heading">INK</div>
+          <div className="panel-heading">{t('ink')}</div>
           <div className="swatch-row">
             {SWATCHES.map((h) => {
               const c = hexToRgba(h);
@@ -186,49 +197,49 @@ function ToolPanel() {
             }} />
           </label>
           <label className="slider-field">
-            <span>Width <b>{config.base_width.toFixed(1)}</b></span>
+            <span>{t('width')} <b>{config.base_width.toFixed(1)}</b></span>
             <input type="range" min={0.5} max={tool === 'highlighter' ? 40 : tool === 'pencil' ? 16 : 20} step={0.5}
               value={config.base_width} onChange={(e) => patch({ base_width: Number(e.target.value) })} />
           </label>
-          <Toggle label="Pressure" checked={config.pressure_enabled} onChange={(v) => patch({ pressure_enabled: v })} />
-          <Toggle label="Neon glow" checked={config.neon} onChange={(v) => patch({ neon: v })} />
+          <Toggle label={t('pressure')} checked={config.pressure_enabled} onChange={(v) => patch({ pressure_enabled: v })} />
+          <Toggle label={t('neonGlow')} checked={config.neon} onChange={(v) => patch({ neon: v })} />
           {config.neon && (
             <label className="slider-field">
-              <span>Glow <b>{Math.round(config.neon_strength * 100)}</b></span>
+              <span>{t('neonGlow')} <b>{Math.round(config.neon_strength * 100)}</b></span>
               <input type="range" min={0} max={1} step={0.05} value={config.neon_strength}
                 onChange={(e) => patch({ neon_strength: Number(e.target.value) })} />
             </label>
           )}
           {tool === 'dashed' && (
             <>
-              <label className="slider-field"><span>Dash <b>{config.dash_length}</b></span>
+              <label className="slider-field"><span>{t('dash')} <b>{config.dash_length}</b></span>
                 <input type="range" min={2} max={40} step={1} value={config.dash_length} onChange={(e) => patch({ dash_length: Number(e.target.value) })} /></label>
-              <label className="slider-field"><span>Gap <b>{config.dash_gap}</b></span>
+              <label className="slider-field"><span>{t('gap')} <b>{config.dash_gap}</b></span>
                 <input type="range" min={2} max={40} step={1} value={config.dash_gap} onChange={(e) => patch({ dash_gap: Number(e.target.value) })} /></label>
             </>
           )}
           {tool === 'calligraphy' && (
-            <label className="slider-field"><span>Nib <b>{config.direction_strength.toFixed(2)}</b></span>
+            <label className="slider-field"><span>{t('nib')} <b>{config.direction_strength.toFixed(2)}</b></span>
               <input type="range" min={0} max={0.95} step={0.05} value={config.direction_strength} onChange={(e) => patch({ direction_strength: Number(e.target.value) })} /></label>
           )}
           {tool === 'speed' && (
-            <label className="slider-field"><span>Speed <b>{config.speed_strength.toFixed(2)}</b></span>
+            <label className="slider-field"><span>{t('speed')} <b>{config.speed_strength.toFixed(2)}</b></span>
               <input type="range" min={0} max={0.92} step={0.04} value={config.speed_strength} onChange={(e) => patch({ speed_strength: Number(e.target.value) })} /></label>
           )}
           {tool === 'taper' && (
-            <Toggle label="Taper" checked={config.taper_enabled} onChange={(v) => patch({ taper_enabled: v })} />
+            <Toggle label={t('taper')} checked={config.taper_enabled} onChange={(v) => patch({ taper_enabled: v })} />
           )}
           {tool === 'highlighter' && (
-            <label className="slider-field"><span>Opacity <b>{Math.round(config.highlighter_alpha * 100)}%</b></span>
+            <label className="slider-field"><span>{t('opacity')} <b>{Math.round(config.highlighter_alpha * 100)}%</b></span>
               <input type="range" min={0.1} max={0.9} step={0.05} value={config.highlighter_alpha} onChange={(e) => patch({ highlighter_alpha: Number(e.target.value) })} /></label>
           )}
-          <Toggle label="Constant screen size" checked={config.scale === false} onChange={(v) => patch({ scale: !v })} />
+          <Toggle label={t('constantSize')} checked={config.scale === false} onChange={(v) => patch({ scale: !v })} />
         </>
       )}
       {tool === 'eraser' && (
         <>
-          <div className="panel-heading">ERASER</div>
-          <label className="slider-field"><span>Radius <b>{config.base_width.toFixed(0)}</b></span>
+          <div className="panel-heading">{t('eraser')}</div>
+          <label className="slider-field"><span>{t('radius')} <b>{config.base_width.toFixed(0)}</b></span>
             <input type="range" min={1} max={80} step={1} value={config.base_width} onChange={(e) => patch({ base_width: Number(e.target.value) })} /></label>
           <div className="segmented">
             {(['stroke', 'area'] as const).map((m) => (
@@ -239,7 +250,7 @@ function ToolPanel() {
       )}
       {tool === 'shape' && (
         <>
-          <div className="panel-heading">SHAPE · {shapeKind}</div>
+          <div className="panel-heading">{t('shape')} · {shapeKind}</div>
           <div className="chip-grid">
             {SHAPE_KINDS.map((k) => (
               <button key={k} className={`chip ${shapeKind === k ? 'active' : ''}`} onClick={() => setShapeKind(k)}>{k.replace(/_/g, ' ')}</button>
@@ -249,7 +260,7 @@ function ToolPanel() {
       )}
       {tool === 'sticky_note' && (
         <>
-          <div className="panel-heading">STICKY STYLE</div>
+          <div className="panel-heading">{t('stickyStyle')}</div>
           <div className="chip-grid">
             {STICKY_STYLES.map((k) => <button key={k} className={`chip ${stickyStyle === k ? 'active' : ''}`} onClick={() => setStickyStyle(k)}>{k}</button>)}
           </div>
@@ -257,7 +268,7 @@ function ToolPanel() {
       )}
       {tool === 'tape' && (
         <>
-          <div className="panel-heading">TAPE PATTERN</div>
+          <div className="panel-heading">{t('tapePattern')}</div>
           <div className="chip-grid">
             {TAPE_PATTERNS.map((k) => <button key={k} className={`chip ${tapePattern === k ? 'active' : ''}`} onClick={() => setTapePattern(k)}>{k}</button>)}
           </div>
@@ -265,24 +276,24 @@ function ToolPanel() {
       )}
       {tool === 'table' && (
         <>
-          <div className="panel-heading">TABLE SIZE</div>
-          <label className="slider-field"><span>Rows <b>{tableRows}</b></span><input type="range" min={1} max={12} value={tableRows} onChange={(e) => setTableDims(Number(e.target.value), tableCols)} /></label>
-          <label className="slider-field"><span>Columns <b>{tableCols}</b></span><input type="range" min={1} max={12} value={tableCols} onChange={(e) => setTableDims(tableRows, Number(e.target.value))} /></label>
+          <div className="panel-heading">{t('tableSize')}</div>
+          <label className="slider-field"><span>{t('rows')} <b>{tableRows}</b></span><input type="range" min={1} max={12} value={tableRows} onChange={(e) => setTableDims(Number(e.target.value), tableCols)} /></label>
+          <label className="slider-field"><span>{t('columns')} <b>{tableCols}</b></span><input type="range" min={1} max={12} value={tableCols} onChange={(e) => setTableDims(tableRows, Number(e.target.value))} /></label>
         </>
       )}
       {tool === 'pen' && (
         <>
-          <div className="panel-heading">GESTURES</div>
-          <Toggle label="Scribble to erase" checked={scribbleToErase} onChange={setScribbleToErase} />
-          <div className="panel-note">Hold still before lifting the pen to snap your ink into a perfect shape.</div>
+          <div className="panel-heading">{t('gestures')}</div>
+          <Toggle label={t('scribbleToErase')} checked={scribbleToErase} onChange={setScribbleToErase} />
+          <div className="panel-note">{t('gesturesHint')}</div>
         </>
       )}
-      <div className="panel-heading">RULER</div>
-      <Toggle label="Show ruler" checked={ruler.visible} onChange={(v) => setRuler({ visible: v })} />
+      <div className="panel-heading">{t('ruler')}</div>
+      <Toggle label={t('showRuler')} checked={ruler.visible} onChange={(v) => setRuler({ visible: v })} />
       {ruler.visible && (
         <>
-          <Toggle label="Lock ruler" checked={ruler.locked} onChange={(v) => setRuler({ locked: v })} />
-          <label className="slider-field"><span>Angle <b>{Math.round(ruler.angle)}°</b></span><input type="range" min={-90} max={90} value={ruler.angle} onChange={(e) => setRuler({ angle: Number(e.target.value) })} /></label>
+          <Toggle label={t('lockRuler')} checked={ruler.locked} onChange={(v) => setRuler({ locked: v })} />
+          <label className="slider-field"><span>{t('rotate')} <b>{Math.round(ruler.angle)}°</b></span><input type="range" min={-90} max={90} value={ruler.angle} onChange={(e) => setRuler({ angle: Number(e.target.value) })} /></label>
         </>
       )}
     </aside>
@@ -308,29 +319,30 @@ function PagePanel({ refreshKey }: { refreshKey: number }) {
   const removeBookmark = useEditor((s) => s.removeBookmark);
   const flow = useEditor((s) => s.doc.flow ?? '');
   const setFlow = useEditor((s) => s.setFlow);
+  const t = useT();
   const [open, setOpen] = useState(true);
   return (
     <aside className={`page-panel ${open ? '' : 'collapsed'}`}>
       <button className="panel-toggle" onClick={() => setOpen(!open)}>{open ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</button>
       {open && (
         <>
-          <div className="panel-heading">PAGES · {pages.length}</div>
+          <div className="panel-heading">{t('pages')} · {pages.length}</div>
           <div className="page-list">
             {pages.map((p, i) => (
               <button key={p.uid} className={`page-item ${i === pageIndex ? 'active' : ''}`} onClick={() => setPage(i)}>
                 <span className="page-thumb">{i + 1}</span>
-                <span>Page {i + 1}<small>{p.items.length} items</small></span>
+                <span>{t('page')} {i + 1}<small>{p.items.length} {t('items')}</small></span>
               </button>
             ))}
           </div>
           <div className="page-actions">
-            <button className="icon-btn" title="Add page" onClick={addPage}><Plus size={16} /></button>
-            <button className="icon-btn" title="Delete page" disabled={pages.length <= 1} onClick={() => deletePage(pageIndex)}><Trash2 size={16} /></button>
-            <button className="icon-btn" title="Bookmark this page" onClick={() => addBookmark(pageIndex, `Page ${pageIndex + 1}`)}><Bookmark size={16} /></button>
+            <button className="icon-btn" title={t('addPage')} onClick={addPage}><Plus size={16} /></button>
+            <button className="icon-btn" title={t('deletePage')} disabled={pages.length <= 1} onClick={() => deletePage(pageIndex)}><Trash2 size={16} /></button>
+            <button className="icon-btn" title={t('bookmark')} onClick={() => addBookmark(pageIndex, `${t('page')} ${pageIndex + 1}`)}><Bookmark size={16} /></button>
           </div>
           {bookmarks.length > 0 && (
             <>
-              <div className="panel-heading">BOOKMARKS</div>
+              <div className="panel-heading">{t('bookmarks')}</div>
               {bookmarks.map((b, i) => (
                 <div key={`${b.page}-${i}`} className="bookmark-row">
                   <button onClick={() => setPage(b.page)}>{b.label}</button>
@@ -339,10 +351,10 @@ function PagePanel({ refreshKey }: { refreshKey: number }) {
               ))}
             </>
           )}
-          <div className="panel-heading">MINIMAP</div>
+          <div className="panel-heading">{t('minimap')}</div>
           <Minimap />
-          <div className="panel-heading">FLOW TEXT</div>
-          <textarea className="flow-editor" placeholder="Document-wide notes…" value={flow} onChange={(e) => setFlow(e.target.value)} />
+          <div className="panel-heading">{t('flowText')}</div>
+          <textarea className="flow-editor" placeholder={t('flowText')} value={flow} onChange={(e) => setFlow(e.target.value)} />
           <Library refreshKey={refreshKey} />
         </>
       )}
@@ -355,6 +367,7 @@ function SelectionBar() {
   const commit = useEditor((s) => s.commit);
   const setSelection = useEditor((s) => s.setSelection);
   const setEditingUid = useEditor((s) => s.setEditingUid);
+  const t = useT();
   if (!selection.length) return null;
 
   const mutate = (label: string, fn: (items: CanvasItem[]) => void) => {
@@ -366,37 +379,37 @@ function SelectionBar() {
 
   return (
     <div className="selection-bar">
-      <span>{selection.length} selected</span>
-      <button title="Duplicate" onClick={() => {
+      <span>{selection.length} {t('selected')}</span>
+      <button title={t('duplicate')} onClick={() => {
         mutate('Duplicate', (items) => {
           const copies = items.filter((i) => selection.includes(i.uid)).map((i) => { const c = cloneItem(i); c.rotation = i.rotation; return c; });
           copies.forEach((c) => { if (c.kind === 'stroke') c.samples = c.samples.map((s) => [s[0] + 24, s[1] + 24, s[2], ...(s.length > 3 ? [s[3]] : [])] as typeof s); else if ('rect' in c) c.rect = [c.rect[0] + 24, c.rect[1] + 24, c.rect[2], c.rect[3]]; else if ('pos' in c) c.pos = [c.pos[0] + 24, c.pos[1] + 24]; });
           items.push(...copies);
         });
         setSelection([]);
-      }}>Duplicate</button>
-      <button title="Group" onClick={() => {
+      }}>{t('duplicate')}</button>
+      <button title={t('group')} onClick={() => {
         mutate('Group', (items) => {
           const chosen = items.filter((i) => selection.includes(i.uid));
           const rest = items.filter((i) => !selection.includes(i.uid));
           items.splice(0, items.length, ...rest, makeGroup(chosen.map((i) => cloneItem(i))));
         });
         setSelection([]);
-      }}>Group</button>
-      <button title="Bring to front" onClick={() => mutate('Bring to front', (items) => {
+      }}>{t('group')}</button>
+      <button title={t('front')} onClick={() => mutate('Bring to front', (items) => {
         const chosen = items.filter((i) => selection.includes(i.uid));
         items.splice(0, items.length, ...items.filter((i) => !selection.includes(i.uid)), ...chosen);
-      })}>Front</button>
-      <button title="Send to back" onClick={() => mutate('Send to back', (items) => {
+      })}>{t('front')}</button>
+      <button title={t('back')} onClick={() => mutate('Send to back', (items) => {
         const chosen = items.filter((i) => selection.includes(i.uid));
         items.splice(0, items.length, ...chosen, ...items.filter((i) => !selection.includes(i.uid)));
-      })}>Back</button>
-      <button title="Rotate 90°" onClick={() => mutate('Rotate', (items) => items.forEach((i) => { if (selection.includes(i.uid)) i.rotation = (i.rotation ?? 0) + 90; }))}>Rotate</button>
-      <button title="Edit" onClick={() => setEditingUid(selection[0])}>Edit</button>
-      <button className="danger" title="Delete" onClick={() => {
+      })}>{t('back')}</button>
+      <button title={t('rotate')} onClick={() => mutate('Rotate', (items) => items.forEach((i) => { if (selection.includes(i.uid)) i.rotation = (i.rotation ?? 0) + 90; }))}>{t('rotate')}</button>
+      <button title={t('edit')} onClick={() => setEditingUid(selection[0])}>{t('edit')}</button>
+      <button className="danger" title={t('delete')} onClick={() => {
         mutate('Delete', (items) => items.splice(0, items.length, ...items.filter((i) => !selection.includes(i.uid))));
         setSelection([]);
-      }}>Delete</button>
+      }}>{t('delete')}</button>
     </div>
   );
 }
@@ -405,11 +418,12 @@ function SplitView() {
   const pages = useEditor((s) => s.doc.pages);
   const pageIndex = useEditor((s) => s.pageIndex);
   const setPage = useEditor((s) => s.setPage);
+  const t = useT();
   const pdfPages = pages.map((p, i) => ({ p, i })).filter(({ p }) => p.pdf_asset);
-  if (!pdfPages.length) return <aside className="split-view"><div className="panel-heading">PDF REFERENCE</div><div className="panel-note">Import a PDF to see its pages here.</div></aside>;
+  if (!pdfPages.length) return <aside className="split-view"><div className="panel-heading">{t('pdfReference')}</div><div className="panel-note">{t('importPdfHint')}</div></aside>;
   return (
     <aside className="split-view">
-      <div className="panel-heading">PDF · {pdfPages.length} PAGES</div>
+      <div className="panel-heading">PDF · {pdfPages.length} {t('pages')}</div>
       <div className="pdf-thumbs">
         {pdfPages.map(({ p, i }) => {
           const url = p.pdf_asset ? assetUrl(p.pdf_asset) : undefined;
@@ -445,16 +459,17 @@ function StatusBar() {
   const tool = useEditor((s) => s.tool);
   const zoom = useEditor((s) => s.zoom);
   const selection = useEditor((s) => s.selection.length);
+  const t = useT();
   return (
     <footer className="statusbar">
-      <span>Page {pageIndex + 1} / {pages}</span>
+      <span>{t('page')} {pageIndex + 1} / {pages}</span>
       <span className="dot">·</span>
-      <span>Tool: {tool}</span>
+      <span>{t('tool')}: {tool}</span>
       <span className="dot">·</span>
       <span>{Math.round(zoom * 100)}%</span>
-      {selection > 0 && <><span className="dot">·</span><span>{selection} selected</span></>}
+      {selection > 0 && <><span className="dot">·</span><span>{selection} {t('selected')}</span></>}
       <div className="spacer" />
-      <span>Local-first · saved in your browser</span>
+      <span>{t('localFirst')}</span>
     </footer>
   );
 }
@@ -462,11 +477,12 @@ function StatusBar() {
 function Library({ refreshKey }: { refreshKey: number }) {
   const [docs, setDocs] = useState<{ id: string; name: string; updatedAt: number }[]>([]);
   const load = useEditor((s) => s.loadDocument);
+  const t = useT();
   useEffect(() => { listDocuments().then((all) => setDocs(all.map(({ id, name, updatedAt }) => ({ id, name, updatedAt })))); }, [refreshKey]);
   if (!docs.length) return null;
   return (
     <div className="library">
-      <div className="panel-heading">RECENT NOTES</div>
+      <div className="panel-heading">{t('recentNotes')}</div>
       {docs.slice(0, 5).map((d) => (
         <button key={d.id} className="library-item" onClick={async () => {
           const rec = await loadDocument(d.id);

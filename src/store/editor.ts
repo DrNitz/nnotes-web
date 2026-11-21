@@ -26,6 +26,7 @@ export interface EditorState {
   zoom: number;
   origin: { x: number; y: number };
   theme: ThemeMode;
+  lang: string;
   toolbarDock: 'left' | 'right' | 'top' | 'bottom';
   showGrid: boolean;
   shapeKind: ShapeKind;
@@ -51,6 +52,7 @@ export interface EditorState {
   setZoom: (zoom: number, anchor?: { x: number; y: number }) => void;
   setOrigin: (origin: { x: number; y: number }) => void;
   setTheme: (theme: ThemeMode) => void;
+  setLang: (lang: string) => void;
   setToolbarDock: (dock: 'left' | 'right' | 'top' | 'bottom') => void;
   setShowGrid: (show: boolean) => void;
   setShapeKind: (kind: ShapeKind) => void;
@@ -86,6 +88,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
   zoom: 0.6,
   origin: { x: 40, y: 40 },
   theme: 'dark',
+  lang: 'en',
   toolbarDock: 'left',
   showGrid: true,
   shapeKind: 'rectangle',
@@ -146,6 +149,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
   }),
   setOrigin: (origin) => set({ origin }),
   setTheme: (theme) => set({ theme }),
+  setLang: (lang) => set({ lang }),
   setToolbarDock: (toolbarDock) => set({ toolbarDock }),
   setShowGrid: (showGrid) => set({ showGrid }),
   setShapeKind: (shapeKind) => set({ shapeKind }),

@@ -31,7 +31,9 @@ const en = {
   searchNotes: 'Search notes…', noNotes: 'No saved notes match', close: 'Close',
   focus: 'Focus', break: 'Break', streak: 'day streak', language: 'Language',
   present: 'Present / whiteboard', exitPresent: 'Exit presentation',
-  beautify: 'Auto-beautify',
+  beautify: 'Auto-beautify', record: 'Record voice note',
+  stopRecording: 'Stop recording', recordHint: 'Click a voice clip on the canvas to play it back.',
+  audioClip: 'VOICE NOTE',
   untitled: 'Untitled', screenshotCopied: 'Screenshot copied to clipboard',
 } as const;
 

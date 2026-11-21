@@ -491,7 +491,12 @@ function drawAudioClip(ctx: CanvasRenderingContext2D, item: AudioClipItem) {
   ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.moveTo(x + 14, y + h / 2 - 7); ctx.lineTo(x + 14, y + h / 2 + 7); ctx.lineTo(x + 26, y + h / 2); ctx.closePath(); ctx.fill();
   ctx.font = '12px Inter, sans-serif';
-  ctx.fillText(item.title, x + 36, y + h / 2 + 4, w - 44);
+  ctx.fillText(item.title, x + 36, y + h / 2 + (item.transcript ? -2 : 4), w - 44);
+  if (item.transcript) {
+    ctx.font = '10px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillText(item.transcript.slice(0, 60), x + 36, y + h / 2 + 12, w - 44);
+  }
   ctx.restore();
 }
 

@@ -187,6 +187,8 @@ function parseItem(o: Obj): CanvasItem | null {
         title: str(o.title), duration_ms: num(o.duration_ms, 0), rect: rect(o.rect),
         color: rgba(o.color), locked,
       };
+      if (o.audio_asset !== undefined) item.audio_asset = str(o.audio_asset);
+      if (o.transcript !== undefined) item.transcript = str(o.transcript);
       return item;
     }
     case 'group': {
@@ -367,11 +369,15 @@ function itemToJson(item: CanvasItem): Obj {
       if (item.connections !== undefined) o.connections = item.connections;
       return { ...o, ...locked };
     }
-    case 'audio_clip':
-      return {
+    case 'audio_clip': {
+      const o: Obj = {
         kind: 'audio_clip', id: item.id, track_id: item.track_id, title: item.title,
         duration_ms: item.duration_ms, rect: item.rect, color: item.color, ...locked,
       };
+      if (item.audio_asset !== undefined) o.audio_asset = item.audio_asset;
+      if (item.transcript !== undefined) o.transcript = item.transcript;
+      return o;
+    }
     case 'group':
       return { kind: 'group', items: item.items.map(itemToJson), ...locked };
   }

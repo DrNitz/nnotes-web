@@ -164,6 +164,13 @@ input[type='range'] { width: 100%; accent-color: var(--accent); }
 .bookmark-row > button:first-child:hover { background: var(--panel-2); border-color: var(--border); }
 .bookmark-row .icon-btn { width: 24px; height: 24px; }
 
+.record-btn {
+  display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%;
+  padding: 9px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel-2); color: var(--text); font-size: 12px;
+}
+.record-btn:hover { border-color: var(--danger); color: var(--danger); }
+
 .studio-hero { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 10px; background: var(--panel-2); }
 .mascot { font-size: 42px; line-height: 1; }
 .quote { font-size: 13px; font-style: italic; color: var(--text); }

@@ -206,6 +206,9 @@ export interface AudioClipItem extends ItemBase {
   duration_ms: number;
   rect: Rect;
   color: Rgba;
+  /** ZIP entry holding recorded audio (web: WebM/Opus). */
+  audio_asset?: string;
+  transcript?: string;
 }
 
 export interface GroupItem extends ItemBase {

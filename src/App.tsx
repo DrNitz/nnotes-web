@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bookmark, Brush, Check, ChevronLeft, ChevronRight, Download, Eraser, FilePlus2, Monitor,
+  Pause, Play,
   FolderOpen, Hand, Highlighter, Image, Lasso, LayoutPanelLeft, LayoutPanelTop,
   Minus, Moon, MousePointer2, PanelBottom, PanelRight, Pen, Pencil, Plus, Redo2,
   Save, ScanLine, Search, Shapes, Sparkles, Sun, Trash2, Type, Undo2, X, Zap, ZoomIn, ZoomOut,
@@ -9,7 +10,8 @@ import type { CanvasItem, EditorTool, ShapeKind, StickyStyle, TapePattern, ToolC
 import { hexToRgba, rgbaToHex } from './lib/geometry';
 import { normalizeConfig } from './lib/toolDefaults';
 import { beautifySelected } from './lib/beautify';
-import { cloneItem, makeGroup, makeImage } from './lib/items';
+import { cloneItem, makeAudioClip, makeGroup, makeImage } from './lib/items';
+import { VoiceRecorder } from './lib/voice';
 import { assetUrl } from './store/editor';
 import { parseNNote, serializeNNote } from './lib/nnote';
 import { listDocuments, loadDocument, saveDocument, setPref } from './lib/storage';
@@ -153,9 +155,45 @@ function ToolPanel() {
   const ruler = useEditor((s) => s.ruler);
   const setRuler = useEditor((s) => s.setRuler);
   const t = useT();
+  const recorder = useRef<VoiceRecorder | null>(null);
+  const [recording, setRecording] = useState(false);
 
   const patch = (p: Partial<ToolConfig>) => setConfig(tool, p);
   const isInk = ['pen', 'pencil', 'dashed', 'calligraphy', 'speed', 'taper', 'highlighter'].includes(tool);
+
+  const startRecording = async () => {
+    try {
+      const r = new VoiceRecorder();
+      await r.start();
+      recorder.current = r;
+      setRecording(true);
+    } catch {
+      window.dispatchEvent(new CustomEvent('nnotes-toast', { detail: 'Microphone permission denied' }));
+    }
+  };
+
+  const stopRecording = async () => {
+    const r = recorder.current;
+    if (!r) return;
+    const { blob, transcript } = await r.stop();
+    recorder.current = null;
+    setRecording(false);
+    const s = useEditor.getState();
+    const asset = `assets/audio-${Date.now()}.webm`;
+    const assets = new Map(s.assets);
+    assets.set(asset, blob);
+    s.loadDocument(s.doc, assets, s.docId, s.doc.name);
+    const host = document.querySelector('.canvas-wrap')?.getBoundingClientRect();
+    const center: [number, number] = [
+      (-s.origin.x + (host?.width ?? 800) / 2) / s.zoom,
+      (-s.origin.y + (host?.height ?? 600) / 2) / s.zoom,
+    ];
+    const clip = makeAudioClip([center[0] - 120, center[1] - 27, 240, 54]);
+    clip.audio_asset = asset;
+    clip.transcript = transcript;
+    s.addItem(clip, 'Voice note');
+    assetUrl(asset);
+  };
 
   return (
     <aside className="tool-panel">
@@ -274,6 +312,15 @@ function ToolPanel() {
           <div className="chip-grid">
             {TAPE_PATTERNS.map((k) => <button key={k} className={`chip ${tapePattern === k ? 'active' : ''}`} onClick={() => setTapePattern(k)}>{k}</button>)}
           </div>
+        </>
+      )}
+      {tool === 'audio_clip' && (
+        <>
+          <div className="panel-heading">{t('audioClip')}</div>
+          <button className="record-btn" onClick={recording ? stopRecording : startRecording}>
+            {recording ? <><Pause size={15} /> {t('stopRecording')}</> : <><Play size={15} /> {t('record')}</>}
+          </button>
+          <div className="panel-note">{t('recordHint')}</div>
         </>
       )}
       {tool === 'table' && (

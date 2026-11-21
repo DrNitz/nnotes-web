@@ -266,6 +266,10 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       }
       const hit = page?.items.filter((it) => itemContains(it, c, s.zoom)).pop();
       if (hit) {
+        if (hit.kind === 'audio_clip' && hit.audio_asset) {
+          const url = assetUrl(hit.audio_asset);
+          if (url) void new Audio(url).play().catch(() => {});
+        }
         s.setSelection(s.selection.includes(hit.uid) ? s.selection : [hit.uid]);
         originals.current = new Map(page!.items.filter((it) => s.selection.includes(it.uid) || it.uid === hit.uid).map((it) => [it.uid, cloneItem(it, false)]));
         mode.current = 'move';

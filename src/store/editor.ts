@@ -27,6 +27,7 @@ export interface EditorState {
   origin: { x: number; y: number };
   theme: ThemeMode;
   lang: string;
+  presenting: boolean;
   toolbarDock: 'left' | 'right' | 'top' | 'bottom';
   showGrid: boolean;
   shapeKind: ShapeKind;
@@ -53,6 +54,7 @@ export interface EditorState {
   setOrigin: (origin: { x: number; y: number }) => void;
   setTheme: (theme: ThemeMode) => void;
   setLang: (lang: string) => void;
+  setPresenting: (presenting: boolean) => void;
   setToolbarDock: (dock: 'left' | 'right' | 'top' | 'bottom') => void;
   setShowGrid: (show: boolean) => void;
   setShapeKind: (kind: ShapeKind) => void;
@@ -89,6 +91,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
   origin: { x: 40, y: 40 },
   theme: 'dark',
   lang: 'en',
+  presenting: false,
   toolbarDock: 'left',
   showGrid: true,
   shapeKind: 'rectangle',
@@ -150,6 +153,10 @@ export const useEditor = create<EditorState>()((set, get) => ({
   setOrigin: (origin) => set({ origin }),
   setTheme: (theme) => set({ theme }),
   setLang: (lang) => set({ lang }),
+  setPresenting: (presenting) => set((s) => ({
+    presenting,
+    doc: { ...s.doc, is_board: presenting },
+  })),
   setToolbarDock: (toolbarDock) => set({ toolbarDock }),
   setShowGrid: (showGrid) => set({ showGrid }),
   setShapeKind: (shapeKind) => set({ shapeKind }),

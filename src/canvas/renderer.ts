@@ -31,6 +31,7 @@ export interface RenderInput {
   origin: { x: number; y: number };
   theme: ThemeMode;
   selection: string[];
+  boardMode?: boolean;
   ruler?: { visible: boolean; y: number; angle: number; locked: boolean };
   liveShape?: ShapeItem | null;
   liveRect?: Rect | null;
@@ -548,7 +549,7 @@ export function itemBounds(item: CanvasItem): Rect | null {
 }
 
 export function renderScene(input: RenderInput): void {
-  const { ctx, width, height, dpr, doc, pageIndex, zoom, origin, theme, selection, ruler, liveShape, liveRect, liveStroke, fadingStrokes, eraserCursor, assetUrl } = input;
+  const { ctx, width, height, dpr, doc, pageIndex, zoom, origin, theme, selection, boardMode, ruler, liveShape, liveRect, liveStroke, fadingStrokes, eraserCursor, assetUrl } = input;
   const palette = PALETTES[theme];
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
@@ -563,17 +564,26 @@ export function renderScene(input: RenderInput): void {
   ctx.scale(zoom, zoom);
 
   const style = resolveStyle(doc, page.style);
+  const vx = -origin.x / zoom, vy = -origin.y / zoom;
+  const vw = width / zoom, vh = height / zoom;
+  const ox = boardMode ? vx : 0, oy = boardMode ? vy : 0;
+  const bw = boardMode ? vw : page.width, bh = boardMode ? vh : page.height;
   ctx.fillStyle = rgbaCss(style.page_color);
-  ctx.fillRect(0, 0, page.width, page.height);
-  if (page.pdf_asset) {
+  ctx.fillRect(ox, oy, bw, bh);
+  if (!boardMode && page.pdf_asset) {
     const url = assetUrl(page.pdf_asset);
     const img = url ? cachedImage(url) : null;
     if (img) ctx.drawImage(img, 0, 0, page.width, page.height);
   }
-  drawRuling(ctx, page.width, page.height, style);
-  ctx.strokeStyle = palette.border;
-  ctx.lineWidth = 1 / zoom;
-  ctx.strokeRect(0, 0, page.width, page.height);
+  ctx.save();
+  ctx.translate(ox, oy);
+  drawRuling(ctx, bw, bh, style);
+  ctx.restore();
+  if (!boardMode) {
+    ctx.strokeStyle = palette.border;
+    ctx.lineWidth = 1 / zoom;
+    ctx.strokeRect(0, 0, page.width, page.height);
+  }
 
   // Opaque ink first, then highlighters in a MULTIPLY pass, matching the app.
   page.items.filter((it) => it.kind !== 'stroke' || it.tool !== 'highlighter').forEach((it) => drawItem(ctx, it, assetUrl));

@@ -30,6 +30,7 @@ const en = {
   page: 'Page', tool: 'Tool', localFirst: 'Local-first · saved in your browser',
   searchNotes: 'Search notes…', noNotes: 'No saved notes match', close: 'Close',
   focus: 'Focus', break: 'Break', streak: 'day streak', language: 'Language',
+  present: 'Present / whiteboard', exitPresent: 'Exit presentation',
   untitled: 'Untitled', screenshotCopied: 'Screenshot copied to clipboard',
 } as const;
 

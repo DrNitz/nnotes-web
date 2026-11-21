@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Bookmark, Brush, Check, ChevronLeft, ChevronRight, Download, Eraser, FilePlus2,
+  Bookmark, Brush, Check, ChevronLeft, ChevronRight, Download, Eraser, FilePlus2, Monitor,
   FolderOpen, Hand, Highlighter, Image, Lasso, LayoutPanelLeft, LayoutPanelTop,
   Minus, Moon, MousePointer2, PanelBottom, PanelRight, Pen, Pencil, Plus, Redo2,
   Save, ScanLine, Search, Shapes, Sparkles, Sun, Trash2, Type, Undo2, X, Zap, ZoomIn, ZoomOut,
@@ -70,10 +70,10 @@ function ToolButton({ id, icon: Icon }: { id: EditorTool; icon: typeof Pen }) {
   );
 }
 
-function TopBar({ onSave, onExport, onOpen, onImportPdf, onExportPdf, split, setSplit, onSwitchDocs, onStudio }: {
+function TopBar({ onSave, onExport, onOpen, onImportPdf, onExportPdf, split, setSplit, onSwitchDocs, onStudio, onPresent, presenting }: {
   onSave: () => void; onExport: () => void; onOpen: () => void;
   onImportPdf: () => void; onExportPdf: () => void; split: boolean; setSplit: (v: boolean) => void;
-  onSwitchDocs: () => void; onStudio: () => void;
+  onSwitchDocs: () => void; onStudio: () => void; onPresent: () => void; presenting: boolean;
 }) {
   const name = useEditor((s) => s.doc.name);
   const dirty = useEditor((s) => s.dirty);
@@ -122,6 +122,7 @@ function TopBar({ onSave, onExport, onOpen, onImportPdf, onExportPdf, split, set
         <button className="icon-btn" title={t('exportPdf')} onClick={onExportPdf}><Download size={17} /></button>
         <button className="icon-btn" title={t('save')} onClick={onSave}><Save size={17} /></button>
         <button className="icon-btn" title={t('exportNnote')} onClick={onExport}><Download size={17} /></button>
+        <button className={`icon-btn ${presenting ? 'active' : ''}`} title={t('present')} onClick={onPresent}><Monitor size={17} /></button>
         <button className="icon-btn" title={t('studio')} onClick={onStudio}><Sparkles size={17} /></button>
         <button className="icon-btn" title={t('theme')} onClick={() => setTheme(nextTheme())}><ThemeIcon size={17} /></button>
       </div>
@@ -505,6 +506,16 @@ export default function App() {
   const [split, setSplit] = useState(false);
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showStudio, setShowStudio] = useState(false);
+  const presenting = useEditor((s) => s.presenting);
+  const setPresenting = useEditor((s) => s.setPresenting);
+  const t = useT();
+
+  const togglePresent = () => {
+    const next = !useEditor.getState().presenting;
+    setPresenting(next);
+    if (next) document.querySelector('.stage-area')?.requestFullscreen?.().catch(() => {});
+    else if (document.fullscreenElement) void document.exitFullscreen();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -526,6 +537,7 @@ export default function App() {
           if (page) page.items = page.items.filter((i) => !ids.includes(i.uid));
         });
       } else if (e.key === 'Escape') {
+        if (s.presenting) togglePresent();
         s.setSelection([]);
         s.setEditingUid(null);
       }
@@ -606,13 +618,14 @@ export default function App() {
   };
 
   return (
-    <div className="app">
+    <div className={`app ${presenting ? 'presenting' : ''}`}>
       <TopBar
         onSave={save} onExport={exportFile} onOpen={() => fileRef.current?.click()}
         onImportPdf={() => pdfRef.current?.click()} onExportPdf={exportPdfFile}
         split={split} setSplit={setSplit}
         onSwitchDocs={() => setShowSwitcher(true)}
         onStudio={() => setShowStudio(true)}
+        onPresent={togglePresent} presenting={presenting}
       />
       <input ref={fileRef} type="file" accept=".nnote,.xnote" hidden onChange={(e) => {
         const f = e.target.files?.[0];
@@ -637,6 +650,9 @@ export default function App() {
             <CanvasStage onRequestImage={requestImage} />
             <ObjectEditor />
             <SelectionBar />
+            {presenting && (
+              <button className="exit-present" title={t('exitPresent')} onClick={togglePresent}><X size={18} /> {t('exitPresent')}</button>
+            )}
           </main>
           {split && <SplitView />}
           {dock === 'right' && <ToolPanel />}

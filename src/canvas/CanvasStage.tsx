@@ -88,7 +88,8 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
         ctx,
         width: sizeRef.current.width, height: sizeRef.current.height, dpr: sizeRef.current.dpr,
         doc: s.doc, pageIndex: s.pageIndex, zoom: s.zoom, origin: s.origin, theme: s.theme,
-        selection: s.selection, ruler: s.ruler, liveShape: liveShape.current,
+        selection: s.selection, boardMode: s.presenting || s.doc.is_board,
+        ruler: s.ruler, liveShape: liveShape.current,
         liveRect: liveRect.current, liveStroke: liveStroke.current,
         fadingStrokes: fading.current, eraserCursor: eraserCursor.current, assetUrl,
       });

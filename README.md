@@ -15,8 +15,8 @@ A browser-based port of the **Nnotes Android app canvas** — local-first handwr
 - [x] Phase 2 — Foundation & architecture
 - [x] Phase 3 — Interactive object tools
 - [x] Phase 4 — Documents, IO and productivity
-- [ ] Phase 5 — Localization, presentation & native-only parity
-- [ ] Phase 6 — Verification / feature-parity matrix
+- [x] Phase 5 — Localization, presentation & native-only parity
+- [x] Phase 6 — Verification / feature-parity matrix
 
 ## Docs
 

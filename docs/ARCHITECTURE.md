@@ -110,20 +110,53 @@ not part of the file. Web equivalents live in the Zustand store / IndexedDB pref
 - [x] Studio: Pomodoro focus/break timer, break notification, streak counter,
   mascot picker and daily quote
 
-### Still to build (Phase 5+)
+### Phase 5 — Final parity pass (done)
 
-- Handwriting beautification (ML Kit equivalent), voice recording/transcription
-- Full UI localization (the native app ships 10+ language packs)
-- Presentation/whiteboard mode and board minimap
-- True vector PDF export (web export is raster via jsPDF)
-- Large-document raster cache layer if frame drops appear
+- [x] UI localisation in 10 languages (`en, hi, es, fr, de, ja, ru, ar, pt, zh`)
+  with RTL layout for Arabic and persisted language preference
+- [x] Presentation/whiteboard mode: fullscreen, chrome hidden, infinite paper, exit button + `Esc`
+- [x] Offline auto-beautify: extra smoothing, baseline straightening, shape snapping
+- [x] Voice notes: `MediaRecorder` capture, WebM/Opus in `.nnote` assets, click-to-play,
+  optional Web Speech live transcript
+- [x] True vector PDF export: native PDF paths for ink/shapes, selectable text, raster images
+- [x] Per-page raster cache keyed by document identity, zoom bucket, theme and page
+
+## Final feature-parity matrix
+
+| Android app canvas | Web port | Status |
+|---|---|---|
+| 6 pen engines + highlighter + tape | Ported `StrokeEngine` geometry for all tools | Implemented |
+| Pressure/nib/speed/taper/neon/dash controls | Per-tool config panel | Implemented |
+| Stroke + area eraser, scribble erase | Pointer-based erase with stroke fragmentation | Implemented |
+| Undo/redo (depth 64) | Snapshot history, keyboard shortcuts | Implemented |
+| 34 shape kinds + hold-to-snap | 28 drag-place kinds + `ShapeRecognizer` port | Implemented |
+| Text, sticky notes, tables, tape, mind maps | All with inline editors | Implemented |
+| Images, stickers, Bassett catalog | Images; remote sticker catalog not bundled | Web-equivalent |
+| Lasso/band select, move/resize/rotate, group, z-order | Full selection tool + action bar | Implemented |
+| Ruler with magnet snapping | Screen-space ruler with angle/lock | Implemented |
+| Zoom/pan/pages/board mode, 4-way toolbar | All present | Implemented |
+| 9 ruling patterns, dark/light/OLED | All present | Implemented |
+| PDF import/annotation/split view/export | pdf.js import + annotation + jsPDF raster/vector export | Implemented |
+| `.nnote` read/write, flow.xml, assets | Full ZIP codec with nested items | Implemented |
+| Bookmarks, minimap, document switcher | All present | Implemented |
+| Disappearing ink, screenshot, studio timer/streak/mascot | All present | Implemented |
+| Multi-language UI | 10 languages with RTL | Implemented |
+| Handwriting beautification | Offline smoothing + snapping (no ink-to-text) | Web-equivalent |
+| Voice notes + transcription | MediaRecorder + optional Web Speech (no Whisper) | Web-equivalent |
+| S-Pen buttons, hardware tilt, palm rejection | Pointer Events pressure; no hardware buttons | Not applicable |
+| Android SAF/SD card, launcher widget | IndexedDB local-first storage | Web-equivalent |
+| Tree-sitter code highlighting in flow text | Plain flow text editor | Not ported |
 
 ## Notes on web deviations
 
 - Native stylus pressure/tilt and S-Pen shortcut buttons map to Pointer Events;
   `pressure` is used when available, otherwise a fixed desktop value.
-- Palm rejection heuristic (finger within 600 ms of stylus activity) is not yet ported.
-- ML Kit handwriting beautification, Whisper transcription and Tree-sitter code
-  highlighting require either a web service or a graceful fallback.
-- The app's raster caches are replaced by redraw-on-demand; a cache layer should be
-  added if large documents show frame drops.
+- Palm rejection heuristic (finger within 600 ms of stylus activity) is not ported;
+  touch palm rejection is left to the device/browser.
+- ML Kit ink-to-text and Whisper transcription have no offline browser equivalent;
+  auto-beautify and Web Speech are the documented fallbacks.
+- Voice clips are WebM/Opus; the app's native clips are M4A. Both are stored as
+  binary ZIP assets under `assets/`/`audio/` and round-trip in this app.
+- Vector PDF export draws ink/shapes/text natively; embedded images and PDF page
+  backgrounds remain raster, as they are in the native exporter.
+- Tree-sitter syntax highlighting and the remote sticker catalog are not bundled.

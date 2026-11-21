@@ -9,6 +9,7 @@ import {
   makeSticky, makeTable, makeTape, makeText, scaleItem, selectionHandles, translateItem,
 } from '../lib/items';
 import { renderScene, itemBounds } from './renderer';
+import { pageCache } from './CanvasCache';
 
 interface PointerInfo { x: number; y: number }
 type Mode = 'idle' | 'draw' | 'scribble' | 'erase' | 'pan' | 'select' | 'lasso' | 'pinch'
@@ -110,7 +111,8 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     };
     const ro = new ResizeObserver(resize);
     if (wrapRef.current) ro.observe(wrapRef.current);
-    window.addEventListener('nnotes-asset-loaded', render);
+    const onAssetLoaded = () => { pageCache.clear(); render(); };
+    window.addEventListener('nnotes-asset-loaded', onAssetLoaded);
     let fadeRaf = 0;
     fadeLoop.current = () => {
       cancelAnimationFrame(fadeRaf);
@@ -127,7 +129,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     resize();
     return () => {
       unsub(); ro.disconnect(); cancelAnimationFrame(fadeRaf);
-      window.removeEventListener('nnotes-asset-loaded', render);
+      window.removeEventListener('nnotes-asset-loaded', onAssetLoaded);
     };
   }, []);
 

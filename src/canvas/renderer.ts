@@ -11,6 +11,7 @@ import { DEFAULT_STYLE } from '../types/model';
 import { buildStrokeGeometry, centerlinePath, strokePath, type StrokeGeometry } from '../lib/ink';
 import { rgbaCss } from '../lib/geometry';
 import type { ThemeMode } from '../store/editor';
+import { pageCache } from './CanvasCache';
 
 const SELECTION = '#38bdf8';
 
@@ -32,6 +33,7 @@ export interface RenderInput {
   theme: ThemeMode;
   selection: string[];
   boardMode?: boolean;
+  useCache?: boolean;
   ruler?: { visible: boolean; y: number; angle: number; locked: boolean };
   liveShape?: ShapeItem | null;
   liveRect?: Rect | null;
@@ -554,7 +556,7 @@ export function itemBounds(item: CanvasItem): Rect | null {
 }
 
 export function renderScene(input: RenderInput): void {
-  const { ctx, width, height, dpr, doc, pageIndex, zoom, origin, theme, selection, boardMode, ruler, liveShape, liveRect, liveStroke, fadingStrokes, eraserCursor, assetUrl } = input;
+  const { ctx, width, height, dpr, doc, pageIndex, zoom, origin, theme, selection, boardMode, useCache = true, ruler, liveShape, liveRect, liveStroke, fadingStrokes, eraserCursor, assetUrl } = input;
   const palette = PALETTES[theme];
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
@@ -568,31 +570,53 @@ export function renderScene(input: RenderInput): void {
   ctx.translate(origin.x, origin.y);
   ctx.scale(zoom, zoom);
 
-  const style = resolveStyle(doc, page.style);
-  const vx = -origin.x / zoom, vy = -origin.y / zoom;
-  const vw = width / zoom, vh = height / zoom;
-  const ox = boardMode ? vx : 0, oy = boardMode ? vy : 0;
-  const bw = boardMode ? vw : page.width, bh = boardMode ? vh : page.height;
-  ctx.fillStyle = rgbaCss(style.page_color);
-  ctx.fillRect(ox, oy, bw, bh);
-  if (!boardMode && page.pdf_asset) {
-    const url = assetUrl(page.pdf_asset);
-    const img = url ? cachedImage(url) : null;
-    if (img) ctx.drawImage(img, 0, 0, page.width, page.height);
-  }
-  ctx.save();
-  ctx.translate(ox, oy);
-  drawRuling(ctx, bw, bh, style);
-  ctx.restore();
-  if (!boardMode) {
-    ctx.strokeStyle = palette.border;
-    ctx.lineWidth = 1 / zoom;
-    ctx.strokeRect(0, 0, page.width, page.height);
-  }
+  const paintStatic = () => {
+    const style = resolveStyle(doc, page.style);
+    const vx = -origin.x / zoom, vy = -origin.y / zoom;
+    const vw = width / zoom, vh = height / zoom;
+    const ox = boardMode ? vx : 0, oy = boardMode ? vy : 0;
+    const bw = boardMode ? vw : page.width, bh = boardMode ? vh : page.height;
+    ctx.fillStyle = rgbaCss(style.page_color);
+    ctx.fillRect(ox, oy, bw, bh);
+    if (!boardMode && page.pdf_asset) {
+      const url = assetUrl(page.pdf_asset);
+      const img = url ? cachedImage(url) : null;
+      if (img) ctx.drawImage(img, 0, 0, page.width, page.height);
+    }
+    ctx.save();
+    ctx.translate(ox, oy);
+    drawRuling(ctx, bw, bh, style);
+    ctx.restore();
+    if (!boardMode) {
+      ctx.strokeStyle = palette.border;
+      ctx.lineWidth = 1 / zoom;
+      ctx.strokeRect(0, 0, page.width, page.height);
+    }
+    // Opaque ink first, then highlighters in a MULTIPLY pass, matching the app.
+    page.items.filter((it) => it.kind !== 'stroke' || it.tool !== 'highlighter').forEach((it) => drawItem(ctx, it, assetUrl));
+    page.items.filter((it): it is StrokeItem => it.kind === 'stroke' && it.tool === 'highlighter').forEach((it) => drawStroke(ctx, it, false));
+  };
 
-  // Opaque ink first, then highlighters in a MULTIPLY pass, matching the app.
-  page.items.filter((it) => it.kind !== 'stroke' || it.tool !== 'highlighter').forEach((it) => drawItem(ctx, it, assetUrl));
-  page.items.filter((it): it is StrokeItem => it.kind === 'stroke' && it.tool === 'highlighter').forEach((it) => drawStroke(ctx, it, false));
+  if (useCache && !boardMode) {
+    const scale = Math.min(2, Math.max(1, zoom * dpr));
+    const key = `${pageIndex}|${scale.toFixed(2)}|${theme}|${page.uid}`;
+    const cached = pageCache.get(doc.pages, key, () => {
+      const off = document.createElement('canvas');
+      off.width = Math.max(1, Math.ceil(page.width * scale));
+      off.height = Math.max(1, Math.ceil(page.height * scale));
+      const octx = off.getContext('2d')!;
+      renderScene({
+        ...input, ctx: octx, width: off.width, height: off.height, dpr: scale,
+        zoom: 1, origin: { x: 0, y: 0 }, useCache: false, boardMode: false,
+        selection: [], liveShape: null, liveRect: null, liveStroke: null,
+        fadingStrokes: [], eraserCursor: null, ruler: undefined,
+      });
+      return off;
+    });
+    ctx.drawImage(cached, 0, 0, page.width, page.height);
+  } else {
+    paintStatic();
+  }
 
   if (liveRect) {
     const [rx, ry, rw, rh] = liveRect;

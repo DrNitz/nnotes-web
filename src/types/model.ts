@@ -32,7 +32,8 @@ export type EditorTool =
   | 'audio_clip'
   | 'image'
   | 'tape'
-  | 'screenshot';
+  | 'screenshot'
+  | 'magic';
 
 export type EraseMode = 'stroke' | 'area';
 
@@ -239,6 +240,8 @@ export interface Page {
   width: number;
   height: number;
   pdf_page: number | null;
+  /** Asset entry holding the rasterised PDF background. */
+  pdf_asset?: string;
   style?: PageStyle;
   items: CanvasItem[];
   /** Runtime-only page identity. */

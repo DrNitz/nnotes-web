@@ -42,7 +42,7 @@ function eraseFragments(stroke: StrokeItem, center: Pt, radius: number): StrokeI
 
 const DEFAULT_RECT: Record<string, [number, number]> = {
   sticky_note: [220, 180], table: [320, 200], tape: [280, 52],
-  image: [320, 220], audio_clip: [240, 54], mind_map: [1, 1],
+  image: [320, 220], audio_clip: [240, 54], mind_map: [1, 1], screenshot: [200, 140],
 };
 
 export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) => void }) {
@@ -54,6 +54,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
   const pointers = useRef(new Map<number, PointerInfo>());
   const mode = useRef<Mode>('idle');
   const liveStroke = useRef<StrokeItem | null>(null);
+  const fading = useRef<{ stroke: StrokeItem; born: number }[]>([]);
   const liveShape = useRef<ShapeItem | null>(null);
   const liveRect = useRef<Rect | null>(null);
   const lastSample = useRef<Pt | null>(null);
@@ -74,6 +75,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
   const rulerStart = useRef({ y: 0, angle: 0 });
 
   const requestRender = useCallback(() => requestAnimationFrame(() => renderRef.current()), []);
+  const fadeLoop = useRef<() => void>(() => {});
 
   useEffect(() => {
     const render = () => {
@@ -88,7 +90,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
         doc: s.doc, pageIndex: s.pageIndex, zoom: s.zoom, origin: s.origin, theme: s.theme,
         selection: s.selection, ruler: s.ruler, liveShape: liveShape.current,
         liveRect: liveRect.current, liveStroke: liveStroke.current,
-        eraserCursor: eraserCursor.current, assetUrl,
+        fadingStrokes: fading.current, eraserCursor: eraserCursor.current, assetUrl,
       });
     };
     renderRef.current = render;
@@ -107,8 +109,25 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     };
     const ro = new ResizeObserver(resize);
     if (wrapRef.current) ro.observe(wrapRef.current);
+    window.addEventListener('nnotes-asset-loaded', render);
+    let fadeRaf = 0;
+    fadeLoop.current = () => {
+      cancelAnimationFrame(fadeRaf);
+      const tick = () => {
+        const now = performance.now();
+        const had = fading.current.length;
+        fading.current = fading.current.filter((f) => now < f.born + 500);
+        render();
+        if (fading.current.length) fadeRaf = requestAnimationFrame(tick);
+        else if (had) fading.current = [];
+      };
+      fadeRaf = requestAnimationFrame(tick);
+    };
     resize();
-    return () => { unsub(); ro.disconnect(); };
+    return () => {
+      unsub(); ro.disconnect(); cancelAnimationFrame(fadeRaf);
+      window.removeEventListener('nnotes-asset-loaded', render);
+    };
   }, []);
 
   const content = (p: { x: number; y: number }) => toContent(useEditor.getState(), p);
@@ -127,6 +146,27 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     const sy = s.ruler.y + Math.sin(a) * lx;
     const sx = sizeRef.current.width / 2 + Math.cos(a) * lx;
     return [(sx - s.origin.x) / s.zoom, (sy - s.origin.y) / s.zoom];
+  };
+
+  const copyScreenshot = async (rect: Rect) => {
+    const src = canvasRef.current;
+    if (!src) return;
+    const s = useEditor.getState();
+    const dpr = sizeRef.current.dpr;
+    const x = (s.origin.x + rect[0] * s.zoom) * dpr;
+    const y = (s.origin.y + rect[1] * s.zoom) * dpr;
+    const w = Math.max(1, rect[2] * s.zoom * dpr);
+    const h = Math.max(1, rect[3] * s.zoom * dpr);
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    out.getContext('2d')!.drawImage(src, x, y, w, h, 0, 0, w, h);
+    const blob = await new Promise<Blob>((resolve) => out.toBlob((b) => resolve(b!), 'image/png'));
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      window.dispatchEvent(new CustomEvent('nnotes-toast', { detail: 'Screenshot copied to clipboard' }));
+    } catch {
+      window.dispatchEvent(new CustomEvent('nnotes-toast', { detail: 'Clipboard unavailable — screenshot blocked by browser' }));
+    }
   };
 
   const applyErase = (c: Pt, radiusOverride?: number) => {
@@ -249,7 +289,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       return;
     }
 
-    if (['text', 'sticky_note', 'table', 'tape', 'image', 'mind_map', 'audio_clip'].includes(s.tool)) {
+    if (['text', 'sticky_note', 'table', 'tape', 'image', 'mind_map', 'audio_clip', 'screenshot'].includes(s.tool)) {
       const [dw, dh] = DEFAULT_RECT[s.tool] ?? [200, 120];
       liveRect.current = [c[0], c[1], dw, dh];
       startContent.current = c;
@@ -257,7 +297,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       return;
     }
 
-    if (['pen', 'pencil', 'dashed', 'calligraphy', 'speed', 'taper', 'highlighter', 'tape'].includes(s.tool)) {
+    if (['pen', 'pencil', 'dashed', 'calligraphy', 'speed', 'taper', 'highlighter', 'tape', 'magic'].includes(s.tool)) {
       if (s.scribbleToErase && s.tool !== 'highlighter') {
         mode.current = 'scribble';
         eraseSet.current = new Set();
@@ -265,6 +305,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
         return;
       }
       const config = structuredClone(s.configFor(s.tool as never));
+      if (s.tool === 'magic') { config.base_width = 14; config.pressure_enabled = false; config.rgba = [...s.ink]; }
       const pressure = e.pointerType === 'mouse' ? 0.72 : Math.max(0.05, e.pressure || 0.5);
       const sample: StrokeSample = [...magnetize(c), pressure, 0];
       liveStroke.current = {
@@ -399,6 +440,13 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       const last = stroke.samples[stroke.samples.length - 1];
       if (dist([last[0], last[1]], c) > 0.5) stroke.samples.push([c[0], c[1], last[2], performance.now() - strokeStart.current]);
 
+      if (s.tool === 'magic') {
+        fading.current.push({ stroke, born: performance.now() + 1000 });
+        fadeLoop.current();
+        liveStroke.current = null;
+        lastSample.current = null;
+        return;
+      }
       // Hold-to-snap: a stationary pause before lifting converts the ink to a perfect shape.
       if (performance.now() - lastMoveTime.current > 450 && stroke.tool !== 'highlighter') {
         const recognized = recognizeShape(stroke.samples.map((sm) => [sm[0], sm[1]] as Pt));
@@ -415,6 +463,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     } else if (mode.current === 'place-rect' && liveRect.current) {
       const r = liveRect.current;
       const rect: Rect = dist([r[0], r[1]], c) > 6 / s.zoom ? r : [startContent.current[0], startContent.current[1], r[2], r[3]];
+      if (s.tool === 'screenshot') { void copyScreenshot(rect); liveRect.current = null; return; }
       switch (s.tool) {
         case 'text': {
           const item = makeText([rect[0], rect[1]]);

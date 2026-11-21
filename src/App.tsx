@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Brush, Check, ChevronLeft, ChevronRight, Download, Eraser, FilePlus2,
+  Bookmark, Brush, Check, ChevronLeft, ChevronRight, Download, Eraser, FilePlus2,
   FolderOpen, Hand, Highlighter, Image, Lasso, LayoutPanelLeft, LayoutPanelTop,
   Minus, Moon, MousePointer2, PanelBottom, PanelRight, Pen, Pencil, Plus, Redo2,
-  Save, ScanLine, Shapes, Sun, Trash2, Type, Undo2, Zap, ZoomIn, ZoomOut,
+  Save, ScanLine, Search, Shapes, Sparkles, Sun, Trash2, Type, Undo2, X, Zap, ZoomIn, ZoomOut,
 } from 'lucide-react';
 import type { CanvasItem, EditorTool, ShapeKind, StickyStyle, TapePattern, ToolConfig } from './types/model';
 import { hexToRgba, rgbaToHex } from './lib/geometry';
@@ -15,6 +15,9 @@ import { listDocuments, loadDocument, saveDocument } from './lib/storage';
 import { useEditor, type ThemeMode } from './store/editor';
 import { CanvasStage } from './canvas/CanvasStage';
 import { ObjectEditor } from './canvas/ObjectEditor';
+import { Minimap } from './canvas/Minimap';
+import { DocumentSwitcher } from './DocumentSwitcher';
+import { Studio } from './Studio';
 
 const INK_TOOLS: { id: EditorTool; label: string; icon: typeof Pen }[] = [
   { id: 'pen', label: 'Ballpoint pen', icon: Pen },
@@ -39,6 +42,8 @@ const OTHER_TOOLS: { id: EditorTool; label: string; icon: typeof Pen }[] = [
   { id: 'audio_clip', label: 'Voice note', icon: ScanLine },
   { id: 'image', label: 'Image', icon: Image },
   { id: 'tape', label: 'Study tape', icon: ScanLine },
+  { id: 'screenshot', label: 'Screenshot area', icon: ScanLine },
+  { id: 'magic', label: 'Disappearing ink', icon: Brush },
 ];
 
 const SWATCHES = ['#00E676', '#FFB300', '#EF4444', '#22D3EE', '#A78BFA', '#9CA3AF', '#F8FAFC', '#1E293B'];
@@ -62,7 +67,11 @@ function ToolButton({ id, label, icon: Icon }: { id: EditorTool; label: string; 
   );
 }
 
-function TopBar({ onSave, onExport, onOpen }: { onSave: () => void; onExport: () => void; onOpen: () => void }) {
+function TopBar({ onSave, onExport, onOpen, onImportPdf, onExportPdf, split, setSplit, onSwitchDocs, onStudio }: {
+  onSave: () => void; onExport: () => void; onOpen: () => void;
+  onImportPdf: () => void; onExportPdf: () => void; split: boolean; setSplit: (v: boolean) => void;
+  onSwitchDocs: () => void; onStudio: () => void;
+}) {
   const name = useEditor((s) => s.doc.name);
   const dirty = useEditor((s) => s.dirty);
   const setDocName = useEditor((s) => s.setDocName);
@@ -95,10 +104,15 @@ function TopBar({ onSave, onExport, onOpen }: { onSave: () => void; onExport: ()
         <button className="icon-btn" title="Zoom in" onClick={() => setZoom(zoom * 1.25)}><ZoomIn size={17} /></button>
       </div>
       <div className="btn-group">
+        <button className="icon-btn" title="Document switcher" onClick={onSwitchDocs}><Search size={17} /></button>
         <button className="icon-btn" title="New note" onClick={newDocument}><FilePlus2 size={17} /></button>
         <button className="icon-btn" title="Open .nnote" onClick={onOpen}><FolderOpen size={17} /></button>
+        <button className={`icon-btn ${split ? 'active' : ''}`} title="Toggle PDF split view" onClick={() => setSplit(!split)}><LayoutPanelLeft size={17} /></button>
+        <button className="icon-btn" title="Import PDF" onClick={onImportPdf}><FolderOpen size={17} /></button>
+        <button className="icon-btn" title="Export PDF" onClick={onExportPdf}><Download size={17} /></button>
         <button className="icon-btn" title="Save to browser" onClick={onSave}><Save size={17} /></button>
         <button className="icon-btn" title="Export .nnote" onClick={onExport}><Download size={17} /></button>
+        <button className="icon-btn" title="Studio · focus & streak" onClick={onStudio}><Sparkles size={17} /></button>
         <button className="icon-btn" title="Switch theme" onClick={() => setTheme(nextTheme())}><ThemeIcon size={17} /></button>
       </div>
     </header>
@@ -289,6 +303,11 @@ function PagePanel({ refreshKey }: { refreshKey: number }) {
   const setPage = useEditor((s) => s.setPage);
   const addPage = useEditor((s) => s.addPage);
   const deletePage = useEditor((s) => s.deletePage);
+  const bookmarks = useEditor((s) => s.doc.bookmarks);
+  const addBookmark = useEditor((s) => s.addBookmark);
+  const removeBookmark = useEditor((s) => s.removeBookmark);
+  const flow = useEditor((s) => s.doc.flow ?? '');
+  const setFlow = useEditor((s) => s.setFlow);
   const [open, setOpen] = useState(true);
   return (
     <aside className={`page-panel ${open ? '' : 'collapsed'}`}>
@@ -307,7 +326,23 @@ function PagePanel({ refreshKey }: { refreshKey: number }) {
           <div className="page-actions">
             <button className="icon-btn" title="Add page" onClick={addPage}><Plus size={16} /></button>
             <button className="icon-btn" title="Delete page" disabled={pages.length <= 1} onClick={() => deletePage(pageIndex)}><Trash2 size={16} /></button>
+            <button className="icon-btn" title="Bookmark this page" onClick={() => addBookmark(pageIndex, `Page ${pageIndex + 1}`)}><Bookmark size={16} /></button>
           </div>
+          {bookmarks.length > 0 && (
+            <>
+              <div className="panel-heading">BOOKMARKS</div>
+              {bookmarks.map((b, i) => (
+                <div key={`${b.page}-${i}`} className="bookmark-row">
+                  <button onClick={() => setPage(b.page)}>{b.label}</button>
+                  <button className="icon-btn" title="Remove bookmark" onClick={() => removeBookmark(i)}><X size={13} /></button>
+                </div>
+              ))}
+            </>
+          )}
+          <div className="panel-heading">MINIMAP</div>
+          <Minimap />
+          <div className="panel-heading">FLOW TEXT</div>
+          <textarea className="flow-editor" placeholder="Document-wide notes…" value={flow} onChange={(e) => setFlow(e.target.value)} />
           <Library refreshKey={refreshKey} />
         </>
       )}
@@ -366,6 +401,44 @@ function SelectionBar() {
   );
 }
 
+function SplitView() {
+  const pages = useEditor((s) => s.doc.pages);
+  const pageIndex = useEditor((s) => s.pageIndex);
+  const setPage = useEditor((s) => s.setPage);
+  const pdfPages = pages.map((p, i) => ({ p, i })).filter(({ p }) => p.pdf_asset);
+  if (!pdfPages.length) return <aside className="split-view"><div className="panel-heading">PDF REFERENCE</div><div className="panel-note">Import a PDF to see its pages here.</div></aside>;
+  return (
+    <aside className="split-view">
+      <div className="panel-heading">PDF · {pdfPages.length} PAGES</div>
+      <div className="pdf-thumbs">
+        {pdfPages.map(({ p, i }) => {
+          const url = p.pdf_asset ? assetUrl(p.pdf_asset) : undefined;
+          return (
+            <button key={p.uid} className={`pdf-thumb ${i === pageIndex ? 'active' : ''}`} onClick={() => setPage(i)}>
+              {url && <img src={url} alt={`PDF page ${i + 1}`} />}
+              <span>{i + 1}</span>
+            </button>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
+function Toast() {
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    const onToast = (e: Event) => {
+      setMessage((e as CustomEvent<string>).detail);
+      setTimeout(() => setMessage(''), 2600);
+    };
+    window.addEventListener('nnotes-toast', onToast);
+    return () => window.removeEventListener('nnotes-toast', onToast);
+  }, []);
+  if (!message) return null;
+  return <div className="toast">{message}</div>;
+}
+
 function StatusBar() {
   const pageIndex = useEditor((s) => s.pageIndex);
   const pages = useEditor((s) => s.doc.pages.length);
@@ -410,8 +483,12 @@ export default function App() {
   const dock = useEditor((s) => s.toolbarDock);
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
   const pendingImageRect = useRef<[number, number, number, number] | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [split, setSplit] = useState(false);
+  const [showSwitcher, setShowSwitcher] = useState(false);
+  const [showStudio, setShowStudio] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -478,6 +555,34 @@ export default function App() {
     pendingImageRect.current = null;
   };
 
+  const importPdfFile = async (file: File) => {
+    const { importPdf } = await import('./lib/pdf');
+    const result = await importPdf(file);
+    const s = useEditor.getState();
+    const assets = new Map(s.assets);
+    result.assets.forEach((v, k) => assets.set(k, v));
+    s.loadDocument({
+      ...s.doc,
+      has_pdf: true,
+      pages: [...s.doc.pages, ...result.pages],
+      bookmarks: [...s.doc.bookmarks, { page: s.doc.pages.length, label: file.name }],
+    }, assets, s.docId, s.doc.name);
+    setSplit(true);
+    setRefreshKey((k) => k + 1);
+  };
+
+  const exportPdfFile = async () => {
+    const { exportPdf } = await import('./lib/pdf');
+    const s = useEditor.getState();
+    const blob = await exportPdf(s.doc, s.doc.name || 'Untitled', s.theme);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(s.doc.name || 'Untitled').replace(/[^\w\-]+/g, '_')}.pdf`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const openFile = async (file: File) => {
     const parsed = await parseNNote(await file.arrayBuffer());
     const s = useEditor.getState();
@@ -486,10 +591,21 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopBar onSave={save} onExport={exportFile} onOpen={() => fileRef.current?.click()} />
+      <TopBar
+        onSave={save} onExport={exportFile} onOpen={() => fileRef.current?.click()}
+        onImportPdf={() => pdfRef.current?.click()} onExportPdf={exportPdfFile}
+        split={split} setSplit={setSplit}
+        onSwitchDocs={() => setShowSwitcher(true)}
+        onStudio={() => setShowStudio(true)}
+      />
       <input ref={fileRef} type="file" accept=".nnote,.xnote" hidden onChange={(e) => {
         const f = e.target.files?.[0];
         if (f) void openFile(f);
+        e.target.value = '';
+      }} />
+      <input ref={pdfRef} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => {
+        const f = e.target.files?.[0];
+        if (f) void importPdfFile(f);
         e.target.value = '';
       }} />
       <input ref={imageRef} type="file" accept="image/*" hidden onChange={(e) => {
@@ -506,12 +622,16 @@ export default function App() {
             <ObjectEditor />
             <SelectionBar />
           </main>
+          {split && <SplitView />}
           {dock === 'right' && <ToolPanel />}
           <PagePanel refreshKey={refreshKey} />
         </div>
         {dock === 'bottom' && <ToolPanel />}
       </div>
       <StatusBar />
+      <Toast />
+      {showSwitcher && <DocumentSwitcher onClose={() => { setShowSwitcher(false); setRefreshKey((k) => k + 1); }} />}
+      {showStudio && <Studio onClose={() => setShowStudio(false)} />}
     </div>
   );
 }

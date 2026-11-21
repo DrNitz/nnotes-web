@@ -70,6 +70,9 @@ export interface EditorState {
   newDocument: () => void;
   markSaved: () => void;
   setDocName: (name: string) => void;
+  addBookmark: (page: number, label: string) => void;
+  removeBookmark: (index: number) => void;
+  setFlow: (text: string) => void;
 }
 
 export const useEditor = create<EditorState>()((set, get) => ({
@@ -222,6 +225,14 @@ export const useEditor = create<EditorState>()((set, get) => ({
   }),
   markSaved: () => set({ dirty: false }),
   setDocName: (name) => set((s) => ({ doc: { ...s.doc, name }, dirty: true })),
+  addBookmark: (page, label) => set((s) => {
+    if (s.doc.bookmarks.some((b) => b.page === page)) return s;
+    return { doc: { ...s.doc, bookmarks: [...s.doc.bookmarks, { page, label }] }, dirty: true };
+  }),
+  removeBookmark: (index) => set((s) => ({
+    doc: { ...s.doc, bookmarks: s.doc.bookmarks.filter((_, i) => i !== index) }, dirty: true,
+  })),
+  setFlow: (text) => set((s) => ({ doc: { ...s.doc, flow: text }, dirty: true })),
 }));
 
 export function currentPage(s: EditorState): Page | undefined {

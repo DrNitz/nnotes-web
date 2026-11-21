@@ -35,11 +35,24 @@ export interface RenderInput {
   liveShape?: ShapeItem | null;
   liveRect?: Rect | null;
   liveStroke?: StrokeItem | null;
+  fadingStrokes?: { stroke: StrokeItem; born: number }[];
   eraserCursor?: { x: number; y: number; radius: number } | null;
   assetUrl: (name: string) => string | undefined;
 }
 
 const geomCache = new WeakMap<StrokeItem, StrokeGeometry>();
+const imageCache = new Map<string, HTMLImageElement>();
+
+function cachedImage(url: string): HTMLImageElement | null {
+  let img = imageCache.get(url);
+  if (!img) {
+    img = new Image();
+    img.onload = () => window.dispatchEvent(new Event('nnotes-asset-loaded'));
+    img.src = url;
+    imageCache.set(url, img);
+  }
+  return img.complete && img.naturalWidth > 0 ? img : null;
+}
 
 function geometryOf(item: StrokeItem, live: boolean): StrokeGeometry {
   if (live) return buildStrokeGeometry(item.samples, item.config, {
@@ -322,10 +335,8 @@ function drawText(ctx: CanvasRenderingContext2D, item: TextItem) {
 function drawImage(ctx: CanvasRenderingContext2D, item: ImageItem, assetUrl: (name: string) => string | undefined) {
   const url = assetUrl(item.asset);
   if (!url) return;
-  const img = document.createElement('img');
-  img.src = url;
-  // Cached images are usually decoded synchronously; otherwise skip this frame.
-  if (!img.complete || img.naturalWidth === 0) return;
+  const img = cachedImage(url);
+  if (!img) return;
   ctx.save();
   const [x, y, w, h] = item.rect;
   ctx.translate(x + w / 2, y + h / 2);
@@ -537,7 +548,7 @@ export function itemBounds(item: CanvasItem): Rect | null {
 }
 
 export function renderScene(input: RenderInput): void {
-  const { ctx, width, height, dpr, doc, pageIndex, zoom, origin, theme, selection, ruler, liveShape, liveRect, liveStroke, eraserCursor, assetUrl } = input;
+  const { ctx, width, height, dpr, doc, pageIndex, zoom, origin, theme, selection, ruler, liveShape, liveRect, liveStroke, fadingStrokes, eraserCursor, assetUrl } = input;
   const palette = PALETTES[theme];
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
@@ -554,6 +565,11 @@ export function renderScene(input: RenderInput): void {
   const style = resolveStyle(doc, page.style);
   ctx.fillStyle = rgbaCss(style.page_color);
   ctx.fillRect(0, 0, page.width, page.height);
+  if (page.pdf_asset) {
+    const url = assetUrl(page.pdf_asset);
+    const img = url ? cachedImage(url) : null;
+    if (img) ctx.drawImage(img, 0, 0, page.width, page.height);
+  }
   drawRuling(ctx, page.width, page.height, style);
   ctx.strokeStyle = palette.border;
   ctx.lineWidth = 1 / zoom;
@@ -574,6 +590,17 @@ export function renderScene(input: RenderInput): void {
   }
   if (liveShape) drawShape(ctx, liveShape);
   if (liveStroke) drawStroke(ctx, liveStroke, true);
+  if (fadingStrokes?.length) {
+    const now = performance.now();
+    fadingStrokes.forEach(({ stroke, born }) => {
+      const alpha = now < born ? 1 : Math.max(0, 1 - (now - born) / 500);
+      if (alpha <= 0) return;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      drawStroke(ctx, stroke, true);
+      ctx.restore();
+    });
+  }
 
   selection.forEach((id) => {
     const item = page.items.find((it) => it.uid === id);

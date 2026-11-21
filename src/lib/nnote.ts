@@ -199,7 +199,7 @@ function parseItem(o: Obj): CanvasItem | null {
 }
 
 function parsePage(o: Obj): Page {
-  return {
+  const page: Page = {
     uid: uid(),
     width: num(o.width, A4.width),
     height: num(o.height, A4.height),
@@ -207,6 +207,8 @@ function parsePage(o: Obj): Page {
     style: parseStyle(o.style),
     items: parseItems(o.items),
   };
+  if (o.pdf_asset !== undefined) page.pdf_asset = str(o.pdf_asset);
+  return page;
 }
 
 export async function parseNNote(input: ArrayBuffer | Uint8Array | Blob): Promise<NNoteFile> {
@@ -390,6 +392,7 @@ export async function serializeNNote(file: NNoteFile): Promise<Blob> {
       width: p.width,
       height: p.height,
       pdf_page: p.pdf_page,
+      ...(p.pdf_asset ? { pdf_asset: p.pdf_asset } : {}),
       ...(p.style ? { style: p.style } : {}),
       items: p.items.map((it) => {
         const o = itemToJson(it);

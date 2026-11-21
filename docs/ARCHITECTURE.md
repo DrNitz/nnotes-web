@@ -72,6 +72,10 @@ not part of the file. Web equivalents live in the Zustand store / IndexedDB pref
   editing, selection move, hold-to-snap (exported manifest contained a `line` shape),
   ruler toggle, image insertion, and `.nnote` round-trip with 6 mixed items — all pass
   with zero console errors.
+- Phase 4 browser checks: imported a 4-page PDF (5 pages total, 4 split-view thumbs),
+  exported a 5-page PDF, verified `flow.xml` and bookmarks inside the exported `.nnote`,
+  confirmed disappearing ink leaves no persisted items, screenshot copied to clipboard,
+  Studio timer counts down — all with zero console errors.
 
 ### Phase 3 — Interactive object tools (done)
 
@@ -90,13 +94,29 @@ not part of the file. Web equivalents live in the Zustand store / IndexedDB pref
 - [x] Ruler with angle/lock and stroke magnet snapping
 - [x] Scribble-to-erase
 
-### Still to build (Phase 4+)
+### Phase 4 — Documents, IO and productivity (done)
 
-- PDF import, annotation, split view and vector export
-- Disappearing ink, screenshot-to-clipboard, handwriting beautification
-- Flow text document, bookmarks, minimap, document-switcher search
-- Focus timer, streaks, mascots, localization, presentation mode
-- Large-document raster cache layer if needed
+- [x] PDF import: pdf.js rasterises each PDF page into a page background asset,
+  with the source PDF kept in the `.nnote` ZIP
+- [x] PDF annotation: imported pages are ordinary canvases — every ink/item tool works on them
+- [x] PDF split view: thumbnail rail with click-to-navigate
+- [x] PDF export: jsPDF raster export, one page per canvas page
+- [x] Bookmarks per page, click to jump
+- [x] Minimap with viewport rectangle and click-to-navigate
+- [x] Document switcher modal with search and delete
+- [x] Flow text document persisted to `flow.xml`
+- [x] Disappearing ink: 1 s hold then 0.5 s fade, never committed
+- [x] Screenshot area: crop to PNG and copy to clipboard
+- [x] Studio: Pomodoro focus/break timer, break notification, streak counter,
+  mascot picker and daily quote
+
+### Still to build (Phase 5+)
+
+- Handwriting beautification (ML Kit equivalent), voice recording/transcription
+- Full UI localization (the native app ships 10+ language packs)
+- Presentation/whiteboard mode and board minimap
+- True vector PDF export (web export is raster via jsPDF)
+- Large-document raster cache layer if frame drops appear
 
 ## Notes on web deviations
 

@@ -26,6 +26,10 @@ export type EditorTool =
   | 'lasso'
   | 'shape'
   | 'text'
+  | 'sticky_note'
+  | 'table'
+  | 'mind_map'
+  | 'audio_clip'
   | 'image'
   | 'tape'
   | 'screenshot';
@@ -59,6 +63,8 @@ export interface ItemBase {
   /** Runtime identity. Never serialized. */
   uid: string;
   locked?: boolean;
+  /** Optional rotation in degrees about the item's bounds centre (runtime only for now). */
+  rotation?: number;
 }
 
 export interface StrokeItem extends ItemBase {
@@ -132,6 +138,8 @@ export interface TableItem extends ItemBase {
   corner_radius: number;
   fills?: (Rgba | null)[];
   cell_fills?: { r: number; c: number; color: Rgba }[];
+  /** Row-major cell text, kept as a flat array. */
+  cells?: string[];
 }
 
 export type TapePattern = 'translucent' | 'stripes' | 'sparkle' | 'solid' | 'dots' | 'grid';

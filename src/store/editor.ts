@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  CanvasItem, EditorTool, NNoteDocument, Page, Rgba, ToolConfig,
+  CanvasItem, EditorTool, NNoteDocument, Page, Rgba, ShapeKind, StickyStyle, TapePattern, ToolConfig,
 } from '../types/model';
 import { blankDocument, uid } from '../types/model';
 import { DEFAULT_INK, normalizeConfig } from '../lib/toolDefaults';
@@ -28,6 +28,14 @@ export interface EditorState {
   theme: ThemeMode;
   toolbarDock: 'left' | 'right' | 'top' | 'bottom';
   showGrid: boolean;
+  shapeKind: ShapeKind;
+  stickyStyle: StickyStyle;
+  tableRows: number;
+  tableCols: number;
+  tapePattern: TapePattern;
+  scribbleToErase: boolean;
+  ruler: { visible: boolean; y: number; angle: number; locked: boolean };
+  editingUid: string | null;
   selection: string[];
   history: Snapshot[];
   future: Snapshot[];
@@ -45,6 +53,13 @@ export interface EditorState {
   setTheme: (theme: ThemeMode) => void;
   setToolbarDock: (dock: 'left' | 'right' | 'top' | 'bottom') => void;
   setShowGrid: (show: boolean) => void;
+  setShapeKind: (kind: ShapeKind) => void;
+  setStickyStyle: (style: StickyStyle) => void;
+  setTableDims: (rows: number, cols: number) => void;
+  setTapePattern: (pattern: TapePattern) => void;
+  setScribbleToErase: (enabled: boolean) => void;
+  setRuler: (ruler: Partial<EditorState['ruler']>) => void;
+  setEditingUid: (uid: string | null) => void;
   setSelection: (ids: string[]) => void;
   commit: (label: string, mutate: (pages: Page[]) => void) => void;
   addItem: (item: CanvasItem, label?: string) => void;
@@ -70,6 +85,14 @@ export const useEditor = create<EditorState>()((set, get) => ({
   theme: 'dark',
   toolbarDock: 'left',
   showGrid: true,
+  shapeKind: 'rectangle',
+  stickyStyle: 'lined',
+  tableRows: 3,
+  tableCols: 3,
+  tapePattern: 'translucent',
+  scribbleToErase: false,
+  ruler: { visible: false, y: 300, angle: 0, locked: false },
+  editingUid: null,
   selection: [],
   history: [],
   future: [],
@@ -122,6 +145,13 @@ export const useEditor = create<EditorState>()((set, get) => ({
   setTheme: (theme) => set({ theme }),
   setToolbarDock: (toolbarDock) => set({ toolbarDock }),
   setShowGrid: (showGrid) => set({ showGrid }),
+  setShapeKind: (shapeKind) => set({ shapeKind }),
+  setStickyStyle: (stickyStyle) => set({ stickyStyle }),
+  setTableDims: (tableRows, tableCols) => set({ tableRows, tableCols }),
+  setTapePattern: (tapePattern) => set({ tapePattern }),
+  setScribbleToErase: (scribbleToErase) => set({ scribbleToErase }),
+  setRuler: (patch) => set((s) => ({ ruler: { ...s.ruler, ...patch } })),
+  setEditingUid: (editingUid) => set({ editingUid }),
   setSelection: (selection) => set({ selection }),
 
   commit: (label, mutate) => set((s) => {

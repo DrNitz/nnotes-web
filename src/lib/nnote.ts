@@ -73,7 +73,12 @@ function parseStroke(o: Obj): StrokeItem {
 }
 
 function parseItems(raw: unknown): CanvasItem[] {
-  return arr(raw).map((v) => parseItem(asObj(v))).filter((x): x is CanvasItem => x !== null);
+  return arr(raw).map((v) => {
+    const o = asObj(v);
+    const item = parseItem(o);
+    if (item && o.rotation !== undefined) item.rotation = num(o.rotation, 0);
+    return item;
+  }).filter((x): x is CanvasItem => x !== null);
 }
 
 function parseItem(o: Obj): CanvasItem | null {
@@ -126,6 +131,7 @@ function parseItem(o: Obj): CanvasItem | null {
         const x = asObj(c);
         return { r: num(x.r, 0), c: num(x.c, 0), color: rgba(x.color) };
       });
+      if (o.cells !== undefined) item.cells = arr(o.cells).map((c) => str(c));
       return item;
     }
     case 'tape': {
@@ -319,6 +325,7 @@ function itemToJson(item: CanvasItem): Obj {
       };
       if (item.fills !== undefined) o.fills = item.fills;
       if (item.cell_fills !== undefined) o.cell_fills = item.cell_fills;
+      if (item.cells !== undefined) o.cells = item.cells;
       return { ...o, ...locked };
     }
     case 'tape':
@@ -384,7 +391,11 @@ export async function serializeNNote(file: NNoteFile): Promise<Blob> {
       height: p.height,
       pdf_page: p.pdf_page,
       ...(p.style ? { style: p.style } : {}),
-      items: p.items.map(itemToJson),
+      items: p.items.map((it) => {
+        const o = itemToJson(it);
+        if (it.rotation) o.rotation = it.rotation;
+        return o;
+      }),
     })),
   };
   zip.file('manifest.json', JSON.stringify(manifest), { compression: 'DEFLATE' });

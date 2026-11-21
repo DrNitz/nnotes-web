@@ -13,7 +13,7 @@ A browser-based port of the **Nnotes Android app canvas** — local-first handwr
 - [x] Phase 0 — Feature audit of the Android canvas
 - [x] Phase 1 — Repository created and cloned
 - [x] Phase 2 — Foundation & architecture
-- [ ] Phase 3 — Core canvas engine
+- [x] Phase 3 — Interactive object tools
 - [ ] Phase 4 — Tools & objects
 - [ ] Phase 5 — Documents & IO
 - [ ] Phase 6 — Productivity & polish

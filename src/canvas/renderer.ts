@@ -31,6 +31,9 @@ export interface RenderInput {
   origin: { x: number; y: number };
   theme: ThemeMode;
   selection: string[];
+  ruler?: { visible: boolean; y: number; angle: number; locked: boolean };
+  liveShape?: ShapeItem | null;
+  liveRect?: Rect | null;
   liveStroke?: StrokeItem | null;
   eraserCursor?: { x: number; y: number; radius: number } | null;
   assetUrl: (name: string) => string | undefined;
@@ -348,6 +351,13 @@ function drawTable(ctx: CanvasRenderingContext2D, item: TableItem) {
     const fill = cellFill?.color ?? item.fills?.[r];
     if (fill) { ctx.fillStyle = rgbaCss(fill); ctx.fillRect(xs[c], ys[r], xs[c + 1] - xs[c], ys[r + 1] - ys[r]); }
     ctx.strokeRect(xs[c], ys[r], xs[c + 1] - xs[c], ys[r + 1] - ys[r]);
+    const cell = item.cells?.[r * cols + c];
+    if (cell) {
+      ctx.fillStyle = '#374151';
+      ctx.font = '13px Inter, sans-serif';
+      ctx.textBaseline = 'top';
+      ctx.fillText(cell, xs[c] + 6, ys[r] + 6, xs[c + 1] - xs[c] - 12);
+    }
   }
   ctx.restore();
 }
@@ -474,6 +484,16 @@ function drawAudioClip(ctx: CanvasRenderingContext2D, item: AudioClipItem) {
 }
 
 function drawItem(ctx: CanvasRenderingContext2D, item: CanvasItem, assetUrl: (name: string) => string | undefined) {
+  if (item.rotation) {
+    const b = itemBounds(item);
+    if (b) {
+      const cx = b[0] + b[2] / 2, cy = b[1] + b[3] / 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate((item.rotation * Math.PI) / 180);
+      ctx.translate(-cx, -cy);
+    }
+  }
   switch (item.kind) {
     case 'stroke': drawStroke(ctx, item, false); break;
     case 'text': drawText(ctx, item); break;
@@ -486,6 +506,7 @@ function drawItem(ctx: CanvasRenderingContext2D, item: CanvasItem, assetUrl: (na
     case 'audio_clip': drawAudioClip(ctx, item); break;
     case 'group': (item as GroupItem).items.forEach((child) => drawItem(ctx, child, assetUrl)); break;
   }
+  if (item.rotation && itemBounds(item)) ctx.restore();
 }
 
 export function itemBounds(item: CanvasItem): Rect | null {
@@ -516,7 +537,7 @@ export function itemBounds(item: CanvasItem): Rect | null {
 }
 
 export function renderScene(input: RenderInput): void {
-  const { ctx, width, height, dpr, doc, pageIndex, zoom, origin, theme, selection, liveStroke, eraserCursor, assetUrl } = input;
+  const { ctx, width, height, dpr, doc, pageIndex, zoom, origin, theme, selection, ruler, liveShape, liveRect, liveStroke, eraserCursor, assetUrl } = input;
   const palette = PALETTES[theme];
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
@@ -542,6 +563,16 @@ export function renderScene(input: RenderInput): void {
   page.items.filter((it) => it.kind !== 'stroke' || it.tool !== 'highlighter').forEach((it) => drawItem(ctx, it, assetUrl));
   page.items.filter((it): it is StrokeItem => it.kind === 'stroke' && it.tool === 'highlighter').forEach((it) => drawStroke(ctx, it, false));
 
+  if (liveRect) {
+    const [rx, ry, rw, rh] = liveRect;
+    ctx.save();
+    ctx.setLineDash([6 / zoom, 4 / zoom]);
+    ctx.strokeStyle = SELECTION;
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.strokeRect(rx, ry, rw, rh);
+    ctx.restore();
+  }
+  if (liveShape) drawShape(ctx, liveShape);
   if (liveStroke) drawStroke(ctx, liveStroke, true);
 
   selection.forEach((id) => {
@@ -555,12 +586,26 @@ export function renderScene(input: RenderInput): void {
     ctx.lineWidth = 1.5 / zoom;
     ctx.fillRect(b[0], b[1], b[2], b[3]);
     ctx.strokeRect(b[0], b[1], b[2], b[3]);
-    const hs = 6 / zoom;
-    [[b[0], b[1]], [b[0] + b[2], b[1]], [b[0], b[1] + b[3]], [b[0] + b[2], b[1] + b[3]]].forEach(([hx, hy]) => {
+    const hs = 7 / zoom;
+    const [x, y, w, h] = b;
+    const cx = x + w / 2, cy = y + h / 2;
+    [
+      [x, y], [cx, y], [x + w, y], [x + w, cy],
+      [x + w, y + h], [cx, y + h], [x, y + h], [x, cy],
+    ].forEach(([hx, hy]) => {
       ctx.fillStyle = '#fff';
       ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
       ctx.strokeRect(hx - hs / 2, hy - hs / 2, hs, hs);
     });
+    ctx.beginPath();
+    ctx.moveTo(cx, y);
+    ctx.lineTo(cx, y - 28 / zoom);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, y - 30 / zoom, hs * 0.7, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.stroke();
     ctx.restore();
   });
 
@@ -575,4 +620,29 @@ export function renderScene(input: RenderInput): void {
   }
 
   ctx.restore();
+
+  if (ruler?.visible) {
+    ctx.save();
+    ctx.translate(width / 2, ruler.y);
+    ctx.rotate((ruler.angle * Math.PI) / 180);
+    const half = Math.max(width, height);
+    ctx.fillStyle = 'rgba(56,189,248,0.10)';
+    ctx.strokeStyle = 'rgba(56,189,248,0.75)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.rect(-half, -22, half * 2, 44);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    for (let x = -half; x <= half; x += 10) {
+      const major = Math.round(x / 10) % 5 === 0;
+      ctx.moveTo(x, -22);
+      ctx.lineTo(x, major ? -8 : -15);
+    }
+    ctx.stroke();
+    ctx.fillStyle = SELECTION;
+    ctx.font = '10px Inter, sans-serif';
+    ctx.fillText(`${Math.round(ruler.angle)}°  ${ruler.locked ? 'locked' : 'free'}`, -half + 8, 16);
+    ctx.restore();
+  }
 }

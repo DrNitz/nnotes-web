@@ -68,15 +68,35 @@ not part of the file. Web equivalents live in the Zustand store / IndexedDB pref
 - Export → re-import preserves the same page/item counts.
 - Import of `welcome_note.nnote`: 5 pages, assets and real strokes render without
   console errors.
+- Phase 3 browser checks: shape placement, text/sticky/table placement and inline
+  editing, selection move, hold-to-snap (exported manifest contained a `line` shape),
+  ruler toggle, image insertion, and `.nnote` round-trip with 6 mixed items — all pass
+  with zero console errors.
 
-### Still to build (Phase 3+)
+### Phase 3 — Interactive object tools (done)
 
-- Shape tool placement UI and hold-to-snap recognition (`ShapeRecognizer.kt`)
-- Text boxes, sticky notes, tables, tape, mind maps, images, screenshots as interactive tools
-- PDF import / annotation / split view / vector export
-- Ruler, scribble-to-erase, disappearing ink, audio clips, handwriting beautify
-- Flow text editor, bookmarks, minimap, document switcher search
+- [x] Shape tool: drag to place, 28 shape kinds, axis snap for lines/arrows
+- [x] Hold-to-snap recognition: line, polyline, curve, rectangle, polygon, ellipse/circle
+  (`src/lib/shapeRecognition.ts`, port of `ShapeRecognizer.kt`)
+- [x] Text boxes with inline HTML overlay editor
+- [x] Sticky notes: styles, fasteners, embedded handwriting, inline text editing
+- [x] Tables: configurable rows/cols, editable cells, row/column fractions, fills
+- [x] Study tape: six patterns, reveal toggle, hidden strokes
+- [x] Mind maps: recursive nodes, branches, inline node editing
+- [x] Images: click-to-place with file picker, stored in `.nnote` assets
+- [x] Voice-note clips (placeholder clip; recording is native-only)
+- [x] Selection: move, 8-handle resize, rotate, duplicate, group, z-order, delete
+- [x] Inline table/mind-map editors, keyboard shortcuts
+- [x] Ruler with angle/lock and stroke magnet snapping
+- [x] Scribble-to-erase
+
+### Still to build (Phase 4+)
+
+- PDF import, annotation, split view and vector export
+- Disappearing ink, screenshot-to-clipboard, handwriting beautification
+- Flow text document, bookmarks, minimap, document-switcher search
 - Focus timer, streaks, mascots, localization, presentation mode
+- Large-document raster cache layer if needed
 
 ## Notes on web deviations
 

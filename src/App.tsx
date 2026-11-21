@@ -5,13 +5,16 @@ import {
   Minus, Moon, MousePointer2, PanelBottom, PanelRight, Pen, Pencil, Plus, Redo2,
   Save, ScanLine, Shapes, Sun, Trash2, Type, Undo2, Zap, ZoomIn, ZoomOut,
 } from 'lucide-react';
-import type { EditorTool, ToolConfig } from './types/model';
+import type { CanvasItem, EditorTool, ShapeKind, StickyStyle, TapePattern, ToolConfig } from './types/model';
 import { hexToRgba, rgbaToHex } from './lib/geometry';
 import { normalizeConfig } from './lib/toolDefaults';
+import { cloneItem, makeGroup, makeImage } from './lib/items';
+import { assetUrl } from './store/editor';
 import { parseNNote, serializeNNote } from './lib/nnote';
 import { listDocuments, loadDocument, saveDocument } from './lib/storage';
 import { useEditor, type ThemeMode } from './store/editor';
 import { CanvasStage } from './canvas/CanvasStage';
+import { ObjectEditor } from './canvas/ObjectEditor';
 
 const INK_TOOLS: { id: EditorTool; label: string; icon: typeof Pen }[] = [
   { id: 'pen', label: 'Ballpoint pen', icon: Pen },
@@ -30,11 +33,24 @@ const OTHER_TOOLS: { id: EditorTool; label: string; icon: typeof Pen }[] = [
   { id: 'lasso', label: 'Lasso', icon: Lasso },
   { id: 'shape', label: 'Shapes', icon: Shapes },
   { id: 'text', label: 'Text', icon: Type },
+  { id: 'sticky_note', label: 'Sticky note', icon: FilePlus2 },
+  { id: 'table', label: 'Table', icon: LayoutPanelTop },
+  { id: 'mind_map', label: 'Mind map', icon: Shapes },
+  { id: 'audio_clip', label: 'Voice note', icon: ScanLine },
   { id: 'image', label: 'Image', icon: Image },
   { id: 'tape', label: 'Study tape', icon: ScanLine },
 ];
 
 const SWATCHES = ['#00E676', '#FFB300', '#EF4444', '#22D3EE', '#A78BFA', '#9CA3AF', '#F8FAFC', '#1E293B'];
+
+const SHAPE_KINDS: ShapeKind[] = [
+  'line', 'arrow', 'double_arrow', 'curved_arrow', 'rectangle', 'ellipse', 'circle',
+  'triangle', 'diamond', 'parallelogram', 'trapezoid', 'pentagon', 'hexagon', 'star',
+  'heart', 'cloud', 'callout', 'block_arrow_right', 'block_arrow_left', 'block_arrow_up',
+  'block_arrow_down', 'compass', 'cube', 'cylinder', 'cone', 'sphere', 'pyramid', 'prism',
+];
+const STICKY_STYLES: StickyStyle[] = ['lined', 'grid', 'blank', 'checklist'];
+const TAPE_PATTERNS: TapePattern[] = ['translucent', 'stripes', 'sparkle', 'solid', 'dots', 'grid'];
 
 function ToolButton({ id, label, icon: Icon }: { id: EditorTool; label: string; icon: typeof Pen }) {
   const active = useEditor((s) => s.tool === id);
@@ -97,6 +113,19 @@ function ToolPanel() {
   const setInk = useEditor((s) => s.setInk);
   const dock = useEditor((s) => s.toolbarDock);
   const setDock = useEditor((s) => s.setToolbarDock);
+  const shapeKind = useEditor((s) => s.shapeKind);
+  const setShapeKind = useEditor((s) => s.setShapeKind);
+  const stickyStyle = useEditor((s) => s.stickyStyle);
+  const setStickyStyle = useEditor((s) => s.setStickyStyle);
+  const tapePattern = useEditor((s) => s.tapePattern);
+  const setTapePattern = useEditor((s) => s.setTapePattern);
+  const tableRows = useEditor((s) => s.tableRows);
+  const tableCols = useEditor((s) => s.tableCols);
+  const setTableDims = useEditor((s) => s.setTableDims);
+  const scribbleToErase = useEditor((s) => s.scribbleToErase);
+  const setScribbleToErase = useEditor((s) => s.setScribbleToErase);
+  const ruler = useEditor((s) => s.ruler);
+  const setRuler = useEditor((s) => s.setRuler);
 
   const patch = (p: Partial<ToolConfig>) => setConfig(tool, p);
   const isInk = ['pen', 'pencil', 'dashed', 'calligraphy', 'speed', 'taper', 'highlighter'].includes(tool);
@@ -194,7 +223,54 @@ function ToolPanel() {
           </div>
         </>
       )}
-      <div className="panel-note">Tip: pinch or Ctrl+scroll to zoom · middle-drag or Pan tool to move</div>
+      {tool === 'shape' && (
+        <>
+          <div className="panel-heading">SHAPE · {shapeKind}</div>
+          <div className="chip-grid">
+            {SHAPE_KINDS.map((k) => (
+              <button key={k} className={`chip ${shapeKind === k ? 'active' : ''}`} onClick={() => setShapeKind(k)}>{k.replace(/_/g, ' ')}</button>
+            ))}
+          </div>
+        </>
+      )}
+      {tool === 'sticky_note' && (
+        <>
+          <div className="panel-heading">STICKY STYLE</div>
+          <div className="chip-grid">
+            {STICKY_STYLES.map((k) => <button key={k} className={`chip ${stickyStyle === k ? 'active' : ''}`} onClick={() => setStickyStyle(k)}>{k}</button>)}
+          </div>
+        </>
+      )}
+      {tool === 'tape' && (
+        <>
+          <div className="panel-heading">TAPE PATTERN</div>
+          <div className="chip-grid">
+            {TAPE_PATTERNS.map((k) => <button key={k} className={`chip ${tapePattern === k ? 'active' : ''}`} onClick={() => setTapePattern(k)}>{k}</button>)}
+          </div>
+        </>
+      )}
+      {tool === 'table' && (
+        <>
+          <div className="panel-heading">TABLE SIZE</div>
+          <label className="slider-field"><span>Rows <b>{tableRows}</b></span><input type="range" min={1} max={12} value={tableRows} onChange={(e) => setTableDims(Number(e.target.value), tableCols)} /></label>
+          <label className="slider-field"><span>Columns <b>{tableCols}</b></span><input type="range" min={1} max={12} value={tableCols} onChange={(e) => setTableDims(tableRows, Number(e.target.value))} /></label>
+        </>
+      )}
+      {tool === 'pen' && (
+        <>
+          <div className="panel-heading">GESTURES</div>
+          <Toggle label="Scribble to erase" checked={scribbleToErase} onChange={setScribbleToErase} />
+          <div className="panel-note">Hold still before lifting the pen to snap your ink into a perfect shape.</div>
+        </>
+      )}
+      <div className="panel-heading">RULER</div>
+      <Toggle label="Show ruler" checked={ruler.visible} onChange={(v) => setRuler({ visible: v })} />
+      {ruler.visible && (
+        <>
+          <Toggle label="Lock ruler" checked={ruler.locked} onChange={(v) => setRuler({ locked: v })} />
+          <label className="slider-field"><span>Angle <b>{Math.round(ruler.angle)}°</b></span><input type="range" min={-90} max={90} value={ruler.angle} onChange={(e) => setRuler({ angle: Number(e.target.value) })} /></label>
+        </>
+      )}
     </aside>
   );
 }
@@ -236,6 +312,57 @@ function PagePanel({ refreshKey }: { refreshKey: number }) {
         </>
       )}
     </aside>
+  );
+}
+
+function SelectionBar() {
+  const selection = useEditor((s) => s.selection);
+  const commit = useEditor((s) => s.commit);
+  const setSelection = useEditor((s) => s.setSelection);
+  const setEditingUid = useEditor((s) => s.setEditingUid);
+  if (!selection.length) return null;
+
+  const mutate = (label: string, fn: (items: CanvasItem[]) => void) => {
+    commit(label, (pages) => {
+      const page = pages[useEditor.getState().pageIndex];
+      if (page) fn(page.items);
+    });
+  };
+
+  return (
+    <div className="selection-bar">
+      <span>{selection.length} selected</span>
+      <button title="Duplicate" onClick={() => {
+        mutate('Duplicate', (items) => {
+          const copies = items.filter((i) => selection.includes(i.uid)).map((i) => { const c = cloneItem(i); c.rotation = i.rotation; return c; });
+          copies.forEach((c) => { if (c.kind === 'stroke') c.samples = c.samples.map((s) => [s[0] + 24, s[1] + 24, s[2], ...(s.length > 3 ? [s[3]] : [])] as typeof s); else if ('rect' in c) c.rect = [c.rect[0] + 24, c.rect[1] + 24, c.rect[2], c.rect[3]]; else if ('pos' in c) c.pos = [c.pos[0] + 24, c.pos[1] + 24]; });
+          items.push(...copies);
+        });
+        setSelection([]);
+      }}>Duplicate</button>
+      <button title="Group" onClick={() => {
+        mutate('Group', (items) => {
+          const chosen = items.filter((i) => selection.includes(i.uid));
+          const rest = items.filter((i) => !selection.includes(i.uid));
+          items.splice(0, items.length, ...rest, makeGroup(chosen.map((i) => cloneItem(i))));
+        });
+        setSelection([]);
+      }}>Group</button>
+      <button title="Bring to front" onClick={() => mutate('Bring to front', (items) => {
+        const chosen = items.filter((i) => selection.includes(i.uid));
+        items.splice(0, items.length, ...items.filter((i) => !selection.includes(i.uid)), ...chosen);
+      })}>Front</button>
+      <button title="Send to back" onClick={() => mutate('Send to back', (items) => {
+        const chosen = items.filter((i) => selection.includes(i.uid));
+        items.splice(0, items.length, ...chosen, ...items.filter((i) => !selection.includes(i.uid)));
+      })}>Back</button>
+      <button title="Rotate 90°" onClick={() => mutate('Rotate', (items) => items.forEach((i) => { if (selection.includes(i.uid)) i.rotation = (i.rotation ?? 0) + 90; }))}>Rotate</button>
+      <button title="Edit" onClick={() => setEditingUid(selection[0])}>Edit</button>
+      <button className="danger" title="Delete" onClick={() => {
+        mutate('Delete', (items) => items.splice(0, items.length, ...items.filter((i) => !selection.includes(i.uid))));
+        setSelection([]);
+      }}>Delete</button>
+    </div>
   );
 }
 
@@ -282,7 +409,37 @@ function Library({ refreshKey }: { refreshKey: number }) {
 export default function App() {
   const dock = useEditor((s) => s.toolbarDock);
   const fileRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const pendingImageRect = useRef<[number, number, number, number] | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      const s = useEditor.getState();
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) s.redo(); else s.undo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        const copies = (s.doc.pages[s.pageIndex]?.items ?? []).filter((i) => s.selection.includes(i.uid)).map((i) => cloneItem(i));
+        copies.forEach((c) => { if (c.kind === 'stroke') c.samples = c.samples.map((sm) => [sm[0] + 24, sm[1] + 24, sm[2], ...(sm.length > 3 ? [sm[3]] : [])] as typeof sm); });
+        if (copies.length) s.commit('Duplicate', (pages) => { pages[s.pageIndex]?.items.push(...copies); });
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        const ids = s.selection;
+        if (ids.length) s.commit('Delete', (pages) => {
+          const page = pages[s.pageIndex];
+          if (page) page.items = page.items.filter((i) => !ids.includes(i.uid));
+        });
+      } else if (e.key === 'Escape') {
+        s.setSelection([]);
+        s.setEditingUid(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const save = async () => {
     const s = useEditor.getState();
@@ -303,6 +460,24 @@ export default function App() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const requestImage = (rect: [number, number, number, number]) => {
+    pendingImageRect.current = rect;
+    imageRef.current?.click();
+  };
+
+  const insertImage = async (file: File) => {
+    const rect = pendingImageRect.current ?? [40, 40, 320, 220];
+    const buffer = await file.arrayBuffer();
+    const asset = `assets/image-${Date.now()}.png`;
+    const s = useEditor.getState();
+    const assets = new Map(s.assets);
+    assets.set(asset, new Blob([buffer], { type: file.type || 'image/png' }));
+    s.loadDocument(s.doc, assets, s.docId, s.doc.name);
+    s.addItem(makeImage(rect, asset, 1000, 1000), 'Add image');
+    assetUrl(asset);
+    pendingImageRect.current = null;
+  };
+
   const openFile = async (file: File) => {
     const parsed = await parseNNote(await file.arrayBuffer());
     const s = useEditor.getState();
@@ -317,11 +492,20 @@ export default function App() {
         if (f) void openFile(f);
         e.target.value = '';
       }} />
+      <input ref={imageRef} type="file" accept="image/*" hidden onChange={(e) => {
+        const f = e.target.files?.[0];
+        if (f) void insertImage(f);
+        e.target.value = '';
+      }} />
       <div className={`workspace dock-${dock}`}>
         {dock === 'top' && <ToolPanel />}
         <div className="workspace-row">
           {dock === 'left' && <ToolPanel />}
-          <main className="stage-area"><CanvasStage /></main>
+          <main className="stage-area">
+            <CanvasStage onRequestImage={requestImage} />
+            <ObjectEditor />
+            <SelectionBar />
+          </main>
           {dock === 'right' && <ToolPanel />}
           <PagePanel refreshKey={refreshKey} />
         </div>

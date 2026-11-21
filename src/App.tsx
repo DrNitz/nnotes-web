@@ -154,6 +154,8 @@ function ToolPanel() {
   const setScribbleToErase = useEditor((s) => s.setScribbleToErase);
   const ruler = useEditor((s) => s.ruler);
   const setRuler = useEditor((s) => s.setRuler);
+  const vectorPdf = useEditor((s) => s.vectorPdf);
+  const setVectorPdf = useEditor((s) => s.setVectorPdf);
   const t = useT();
   const recorder = useRef<VoiceRecorder | null>(null);
   const [recording, setRecording] = useState(false);
@@ -337,6 +339,8 @@ function ToolPanel() {
           <div className="panel-note">{t('gesturesHint')}</div>
         </>
       )}
+      <div className="panel-heading">{t('export')}</div>
+      <Toggle label={t('vectorPdf')} checked={vectorPdf} onChange={setVectorPdf} />
       <div className="panel-heading">{t('ruler')}</div>
       <Toggle label={t('showRuler')} checked={ruler.visible} onChange={(v) => setRuler({ visible: v })} />
       {ruler.visible && (
@@ -651,9 +655,10 @@ export default function App() {
   };
 
   const exportPdfFile = async () => {
-    const { exportPdf } = await import('./lib/pdf');
     const s = useEditor.getState();
-    const blob = await exportPdf(s.doc, s.doc.name || 'Untitled', s.theme);
+    const blob = s.vectorPdf
+      ? await (await import('./lib/pdfVector')).exportPdfVector(s.doc, s.doc.name || 'Untitled', s.theme)
+      : await (await import('./lib/pdf')).exportPdf(s.doc, s.doc.name || 'Untitled', s.theme);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

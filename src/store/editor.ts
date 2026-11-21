@@ -28,6 +28,7 @@ export interface EditorState {
   theme: ThemeMode;
   lang: string;
   presenting: boolean;
+  vectorPdf: boolean;
   toolbarDock: 'left' | 'right' | 'top' | 'bottom';
   showGrid: boolean;
   shapeKind: ShapeKind;
@@ -55,6 +56,7 @@ export interface EditorState {
   setTheme: (theme: ThemeMode) => void;
   setLang: (lang: string) => void;
   setPresenting: (presenting: boolean) => void;
+  setVectorPdf: (vector: boolean) => void;
   setToolbarDock: (dock: 'left' | 'right' | 'top' | 'bottom') => void;
   setShowGrid: (show: boolean) => void;
   setShapeKind: (kind: ShapeKind) => void;
@@ -92,6 +94,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
   theme: 'dark',
   lang: 'en',
   presenting: false,
+  vectorPdf: true,
   toolbarDock: 'left',
   showGrid: true,
   shapeKind: 'rectangle',
@@ -157,6 +160,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
     presenting,
     doc: { ...s.doc, is_board: presenting },
   })),
+  setVectorPdf: (vectorPdf) => set({ vectorPdf }),
   setToolbarDock: (toolbarDock) => set({ toolbarDock }),
   setShowGrid: (showGrid) => set({ showGrid }),
   setShapeKind: (shapeKind) => set({ shapeKind }),

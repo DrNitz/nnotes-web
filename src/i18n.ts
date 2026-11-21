@@ -33,7 +33,7 @@ const en = {
   present: 'Present / whiteboard', exitPresent: 'Exit presentation',
   beautify: 'Auto-beautify', record: 'Record voice note',
   stopRecording: 'Stop recording', recordHint: 'Click a voice clip on the canvas to play it back.',
-  audioClip: 'VOICE NOTE',
+  audioClip: 'VOICE NOTE', vectorPdf: 'Vector PDF export', export: 'EXPORT',
   untitled: 'Untitled', screenshotCopied: 'Screenshot copied to clipboard',
 } as const;
 

@@ -8,6 +8,7 @@ import {
 import type { CanvasItem, EditorTool, ShapeKind, StickyStyle, TapePattern, ToolConfig } from './types/model';
 import { hexToRgba, rgbaToHex } from './lib/geometry';
 import { normalizeConfig } from './lib/toolDefaults';
+import { beautifySelected } from './lib/beautify';
 import { cloneItem, makeGroup, makeImage } from './lib/items';
 import { assetUrl } from './store/editor';
 import { parseNNote, serializeNNote } from './lib/nnote';
@@ -405,6 +406,9 @@ function SelectionBar() {
         const chosen = items.filter((i) => selection.includes(i.uid));
         items.splice(0, items.length, ...chosen, ...items.filter((i) => !selection.includes(i.uid)));
       })}>{t('back')}</button>
+      <button title={t('beautify')} onClick={() => {
+        mutate('Beautify', (items) => items.splice(0, items.length, ...beautifySelected(items, selection)));
+      }}><Sparkles size={13} /> {t('beautify')}</button>
       <button title={t('rotate')} onClick={() => mutate('Rotate', (items) => items.forEach((i) => { if (selection.includes(i.uid)) i.rotation = (i.rotation ?? 0) + 90; }))}>{t('rotate')}</button>
       <button title={t('edit')} onClick={() => setEditingUid(selection[0])}>{t('edit')}</button>
       <button className="danger" title={t('delete')} onClick={() => {

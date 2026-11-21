@@ -10,14 +10,26 @@ A browser-based port of the **Nnotes Android app canvas** — local-first handwr
 
 ## Status
 
-- [ ] Phase 0 — Feature audit of the Android canvas (in progress)
+- [x] Phase 0 — Feature audit of the Android canvas
 - [x] Phase 1 — Repository created and cloned
-- [ ] Phase 2 — Foundation & architecture
+- [x] Phase 2 — Foundation & architecture
 - [ ] Phase 3 — Core canvas engine
 - [ ] Phase 4 — Tools & objects
 - [ ] Phase 5 — Documents & IO
 - [ ] Phase 6 — Productivity & polish
 - [ ] Phase 7 — Verification / feature-parity matrix
+
+## Docs
+
+- [Architecture & parity matrix](docs/ARCHITECTURE.md)
+
+## Run locally
+
+```bash
+npm install
+npm run dev     # http://localhost:5173
+npm run build
+```
 
 ## Origin
 

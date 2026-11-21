@@ -1,0 +1,29 @@
+{
+  "name": "nnotes-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Web canvas port of the Nnotes Android app canvas",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "idb": "^8.0.4",
+    "jszip": "^3.10.2",
+    "lucide-react": "^1.77.0",
+    "pdfjs-dist": "5.4.624",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zustand": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}

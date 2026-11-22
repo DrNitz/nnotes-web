@@ -3,6 +3,7 @@ import * as pdfjs from 'pdfjs-dist';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { jsPDF } from 'jspdf';
 import type { NNoteDocument, Page } from '../types/model';
+import { A4 } from '../types/model';
 import { uid } from '../types/model';
 import { renderScene, PALETTES } from '../canvas/renderer';
 import { assetUrl } from '../store/editor';
@@ -41,8 +42,9 @@ export async function importPdf(file: File): Promise<PdfImport> {
     assets.set(name, blob);
     pages.push({
       uid: uid(),
-      width: base.width * (150 / 72),
-      height: base.height * (150 / 72),
+      // PDF pages are rasterised to fit the fixed A4 canvas.
+      width: A4.width,
+      height: A4.height,
       pdf_page: i,
       pdf_asset: name,
       style: { pattern: 'none', page_color: [255, 255, 255, 255] },

@@ -59,7 +59,13 @@ export function ObjectEditor() {
         placeholder={item.kind === 'sticky_note' ? 'Write a note…' : 'Type here…'}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={close}
-        onKeyDown={(e) => { if (e.key === 'Escape') { setDraft(''); setEditingUid(null); } }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            if (draft) save(applyDraft);
+            setDraft('');
+            setEditingUid(null);
+          }
+        }}
       />
     );
   }

@@ -5,6 +5,15 @@
 `/home/drnitz/Nnotes` is read-only reference. All findings below came from reading it;
 no file there was modified. Implementation lives only in this repository.
 
+## A4-only notebook
+
+The web app deliberately supports a **single fixed page size: A4 (1190×1684 content px at 150 dpi)**.
+
+- Every new and imported page is normalised to A4 in `parseNNote`.
+- PDF import rasterises each PDF page into a background asset drawn to the A4 page.
+- The Android app's infinite board mode is not implemented; presentation mode is
+  fullscreen A4 viewing only.
+
 ## Runtime model
 
 ```
@@ -120,6 +129,22 @@ not part of the file. Web equivalents live in the Zustand store / IndexedDB pref
   optional Web Speech live transcript
 - [x] True vector PDF export: native PDF paths for ink/shapes, selectable text, raster images
 - [x] Per-page raster cache keyed by document identity, zoom bucket, theme and page
+
+## Robustness & smoothness notes
+
+- Drag operations (erase, move, resize, rotate) render from a local item preview and
+  commit **once on pointer-up** instead of snapshotting the document on every frame.
+- The raster cache uses quantised zoom buckets, so pinch-zoom no longer rebuilds it
+  continuously.
+- Hovering over the canvas no longer triggers a redraw; only active tools do.
+- Object tools return to Select after placing an item, matching the app's
+  switch-back behaviour.
+- Escape in an inline editor saves the text instead of discarding it.
+- Hold-to-snap requires a 650 ms dwell and a stroke longer than 40 px, so slow
+  handwriting is not accidentally converted to a shape.
+- File import/export, PDF operations and image insertion catch errors and report
+  them through a toast; long operations show a blocking progress overlay.
+- Pointer capture calls are guarded against synthetic or already-released pointers.
 
 ## Final feature-parity matrix
 

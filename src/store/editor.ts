@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   CanvasItem, EditorTool, NNoteDocument, Page, Rgba, ShapeKind, StickyStyle, TapePattern, ToolConfig,
 } from '../types/model';
-import { blankDocument, uid } from '../types/model';
+import { A4, blankDocument, uid } from '../types/model';
 import { DEFAULT_INK, normalizeConfig } from '../lib/toolDefaults';
 
 export type ThemeMode = 'light' | 'dark' | 'oled';
@@ -126,8 +126,8 @@ export const useEditor = create<EditorState>()((set, get) => ({
   })),
   addPage: () => set((s) => ({
     doc: { ...s.doc, pages: [...s.doc.pages, {
-      width: s.doc.pages[0]?.width ?? 1190,
-      height: s.doc.pages[0]?.height ?? 1684,
+      width: A4.width,
+      height: A4.height,
       pdf_page: null,
       items: [],
       uid: uid(),
@@ -156,10 +156,8 @@ export const useEditor = create<EditorState>()((set, get) => ({
   setOrigin: (origin) => set({ origin }),
   setTheme: (theme) => set({ theme }),
   setLang: (lang) => set({ lang }),
-  setPresenting: (presenting) => set((s) => ({
-    presenting,
-    doc: { ...s.doc, is_board: presenting },
-  })),
+  // Presentation is fullscreen A4 viewing only — the app has no infinite board mode.
+  setPresenting: (presenting) => set({ presenting }),
   setVectorPdf: (vectorPdf) => set({ vectorPdf }),
   setToolbarDock: (toolbarDock) => set({ toolbarDock }),
   setShowGrid: (showGrid) => set({ showGrid }),

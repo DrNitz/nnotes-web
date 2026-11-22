@@ -58,6 +58,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
   const fading = useRef<{ stroke: StrokeItem; born: number }[]>([]);
   const liveShape = useRef<ShapeItem | null>(null);
   const liveRect = useRef<Rect | null>(null);
+  const liveItems = useRef<CanvasItem[] | null>(null);
   const lastSample = useRef<Pt | null>(null);
   const lastMoveTime = useRef(0);
   const strokeStart = useRef(0);
@@ -89,7 +90,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
         ctx,
         width: sizeRef.current.width, height: sizeRef.current.height, dpr: sizeRef.current.dpr,
         doc: s.doc, pageIndex: s.pageIndex, zoom: s.zoom, origin: s.origin, theme: s.theme,
-        selection: s.selection, boardMode: s.presenting || s.doc.is_board,
+        selection: s.selection, overrideItems: liveItems.current,
         ruler: s.ruler, liveShape: liveShape.current,
         liveRect: liveRect.current, liveStroke: liveStroke.current,
         fadingStrokes: fading.current, eraserCursor: eraserCursor.current, assetUrl,
@@ -174,14 +175,14 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
 
   const applyErase = (c: Pt, radiusOverride?: number) => {
     const s = useEditor.getState();
-    const page = s.doc.pages[s.pageIndex];
-    if (!page) return;
+    const source = liveItems.current ?? s.doc.pages[s.pageIndex]?.items;
+    if (!source) return;
     const cfg = s.configFor('eraser');
     const radius = radiusOverride ?? cfg.base_width / (cfg.scale === false ? s.zoom : 1);
     const eraseMode = cfg.erase_mode ?? 'area';
     const items: CanvasItem[] = [];
     let changed = false;
-    for (const item of page.items) {
+    for (const item of source) {
       if (eraseSet.current.has(item.uid)) continue;
       if (item.kind === 'stroke') {
         const near = item.samples.some((p) => Math.hypot(p[0] - c[0], p[1] - c[1]) <= radius + item.config.base_width / 2);
@@ -195,12 +196,12 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
         else items.push(item);
       }
     }
-    if (changed) s.replacePageItems(items, 'Erase');
+    if (changed) liveItems.current = items;
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const el = canvasRef.current!;
-    el.setPointerCapture(e.pointerId);
+    try { el.setPointerCapture(e.pointerId); } catch { /* synthetic or already-released pointer */ }
     const p = localPoint(el, e);
     pointers.current.set(e.pointerId, p);
     const s = useEditor.getState();
@@ -237,6 +238,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
 
     if (s.tool === 'eraser') {
       mode.current = 'erase';
+      liveItems.current = structuredClone(s.doc.pages[s.pageIndex]?.items ?? []);
       eraseSet.current = new Set();
       eraserCursor.current = { x: c[0], y: c[1], radius: s.configFor('eraser').base_width };
       applyErase(c);
@@ -260,6 +262,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
             activeHandle.current = handle.id;
             startBounds.current = rect;
             originals.current = new Map(sel.map((it) => [it.uid, cloneItem(it, false)]));
+            liveItems.current = structuredClone(page?.items ?? []);
             mode.current = handle.id === 'rotate' ? 'rotate' : 'resize';
             if (mode.current === 'rotate') rotateStart.current = Math.atan2(p.y - toScreen(s, itemCenter(sel[0])).y, p.x - toScreen(s, itemCenter(sel[0])).x);
             return;
@@ -274,6 +277,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
         }
         s.setSelection(s.selection.includes(hit.uid) ? s.selection : [hit.uid]);
         originals.current = new Map(page!.items.filter((it) => s.selection.includes(it.uid) || it.uid === hit.uid).map((it) => [it.uid, cloneItem(it, false)]));
+        liveItems.current = structuredClone(page!.items);
         mode.current = 'move';
       } else {
         s.setSelection([]);
@@ -307,6 +311,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     if (['pen', 'pencil', 'dashed', 'calligraphy', 'speed', 'taper', 'highlighter', 'tape', 'magic'].includes(s.tool)) {
       if (s.scribbleToErase && s.tool !== 'highlighter') {
         mode.current = 'scribble';
+        liveItems.current = structuredClone(s.doc.pages[s.pageIndex]?.items ?? []);
         eraseSet.current = new Set();
         applyErase(c, 8 / s.zoom);
         return;
@@ -385,14 +390,14 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       const dx = c[0] - startContent.current[0], dy = c[1] - startContent.current[1];
       const page = s.doc.pages[s.pageIndex];
       if (!page) return;
-      const items = page.items.map((it) => {
+      const items = (liveItems.current ?? page.items).map((it) => {
         const original = originals.current.get(it.uid);
         if (!original) return it;
         const copy = cloneItem(original, false);
         translateItem(copy, dx, dy);
         return copy;
       });
-      s.replacePageItems(items, 'Move');
+      liveItems.current = items;
       return;
     }
     if (mode.current === 'resize') {
@@ -403,14 +408,14 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       void anchor;
       const page = s.doc.pages[s.pageIndex];
       if (!page) return;
-      const items = page.items.map((it) => {
+      const items = (liveItems.current ?? page.items).map((it) => {
         const original = originals.current.get(it.uid);
         if (!original) return it;
         const copy = cloneItem(original, false);
         scaleItem(copy, sx, sy, [x, y]);
         return copy;
       });
-      s.replacePageItems(items, 'Resize');
+      liveItems.current = items;
       return;
     }
     if (mode.current === 'rotate') {
@@ -419,14 +424,14 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       const center = toScreen(s, itemCenter([...originals.current.values()][0]));
       const angle = Math.atan2(p.y - center.y, p.x - center.x);
       const delta = ((angle - rotateStart.current) * 180) / Math.PI;
-      const items = page.items.map((it) => {
+      const items = (liveItems.current ?? page.items).map((it) => {
         const original = originals.current.get(it.uid);
         if (!original) return it;
         const copy = cloneItem(original, false);
         copy.rotation = (original.rotation ?? 0) + delta;
         return copy;
       });
-      s.replacePageItems(items, 'Rotate');
+      liveItems.current = items;
       return;
     }
     if (mode.current === 'select' || mode.current === 'lasso') {
@@ -436,11 +441,22 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    canvasRef.current?.releasePointerCapture(e.pointerId);
+    try { canvasRef.current?.releasePointerCapture(e.pointerId); } catch { /* pointer already gone */ }
     pointers.current.delete(e.pointerId);
     const s = useEditor.getState();
     const p = localPoint(canvasRef.current!, e);
     const c = content(p);
+
+    // One history entry per drag — no structuredClone on every pointer move.
+    if (liveItems.current && ['erase', 'scribble', 'move', 'resize', 'rotate'].includes(mode.current)) {
+      const items = liveItems.current;
+      const label = mode.current === 'move' ? 'Move'
+        : mode.current === 'resize' ? 'Resize'
+          : mode.current === 'rotate' ? 'Rotate' : 'Erase';
+      const idx = s.pageIndex;
+      s.commit(label, (pages) => { if (pages[idx]) pages[idx].items = items; });
+      liveItems.current = null;
+    }
 
     if (mode.current === 'draw' && liveStroke.current) {
       const stroke = liveStroke.current;
@@ -455,7 +471,8 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
         return;
       }
       // Hold-to-snap: a stationary pause before lifting converts the ink to a perfect shape.
-      if (performance.now() - lastMoveTime.current > 450 && stroke.tool !== 'highlighter') {
+      const arc = stroke.samples.reduce((sum, sm, i) => i ? sum + dist([stroke.samples[i - 1][0], stroke.samples[i - 1][1]], [sm[0], sm[1]]) : 0, 0);
+      if (performance.now() - lastMoveTime.current > 650 && arc > 40 && stroke.tool !== 'highlighter') {
         const recognized = recognizeShape(stroke.samples.map((sm) => [sm[0], sm[1]] as Pt));
         if (recognized) {
           s.addItem(makeShape(recognized.kind, recognized.start, recognized.end, stroke.config.rgba, null, recognized.vertices), 'Snap shape');
@@ -467,6 +484,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       const shape = liveShape.current;
       if (dist(shape.start, shape.end) > 4 / s.zoom) s.addItem(shape, 'Add shape');
       liveShape.current = null;
+      s.setTool('select');
     } else if (mode.current === 'place-rect' && liveRect.current) {
       const r = liveRect.current;
       const rect: Rect = dist([r[0], r[1]], c) > 6 / s.zoom ? r : [startContent.current[0], startContent.current[1], r[2], r[3]];
@@ -508,6 +526,8 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
           break;
       }
       liveRect.current = null;
+      // Return to Select after placing an object, like the app's "switch back" behaviour.
+      s.setTool('select');
     } else if (mode.current === 'select' && band.current) {
       const rect = rectFromPoints(startContent.current, band.current);
       const page = s.doc.pages[s.pageIndex];
@@ -536,6 +556,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     }
 
     eraserCursor.current = null;
+    liveItems.current = null;
     if (pointers.current.size < 2) { pinch.current = null; mode.current = 'idle'; }
   };
 
@@ -546,8 +567,13 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     s.setZoom(s.zoom * Math.exp(-e.deltaY * (e.ctrlKey || e.metaKey ? 0.01 : 0.0015)), p);
   };
 
+  // Avoid redrawing on every hover — only when a tool is actively modifying the canvas.
   const withRender = (fn: (e: React.PointerEvent<HTMLCanvasElement>) => void) =>
-    (e: React.PointerEvent<HTMLCanvasElement>) => { fn(e); requestRender(); };
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const wasActive = mode.current !== 'idle';
+      fn(e);
+      if (wasActive || mode.current !== 'idle') requestRender();
+    };
 
   const tool = useEditor((s) => s.tool);
   return (

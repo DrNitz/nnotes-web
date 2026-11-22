@@ -2,6 +2,8 @@
 
 A browser-based port of the **Nnotes Android app canvas** — local-first handwritten notes, PDF markup, and study tools.
 
+**Fixed A4 notebook:** every page is A4 (1190×1684 @ 150 dpi). Imported PDF pages are scaled to A4; there is no infinite board mode.
+
 **Live demo:** [https://drnitz.com/nnotes-web/](https://drnitz.com/nnotes-web/) — deployed automatically from `main` via GitHub Pages Actions.
 
 > [!IMPORTANT] Strict source-access rule

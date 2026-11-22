@@ -203,8 +203,9 @@ function parseItem(o: Obj): CanvasItem | null {
 function parsePage(o: Obj): Page {
   const page: Page = {
     uid: uid(),
-    width: num(o.width, A4.width),
-    height: num(o.height, A4.height),
+    // A4-only notebook: every imported page is normalised to the fixed A4 canvas.
+    width: A4.width,
+    height: A4.height,
     pdf_page: o.pdf_page === null || o.pdf_page === undefined ? null : num(o.pdf_page, 0),
     style: parseStyle(o.style),
     items: parseItems(o.items),
@@ -214,11 +215,19 @@ function parsePage(o: Obj): Page {
 }
 
 export async function parseNNote(input: ArrayBuffer | Uint8Array | Blob): Promise<NNoteFile> {
-  const zip = await JSZip.loadAsync(input);
-  const manifestFile = zip.file('manifest.json');
-  if (!manifestFile) throw new Error('Not an Nnotes document: missing manifest.json');
-  const manifestText = await manifestFile.async('string');
-  const m = asObj(JSON.parse(manifestText));
+  let zip: JSZip;
+  let manifestText: string;
+  try {
+    zip = await JSZip.loadAsync(input);
+    const manifestFile = zip.file('manifest.json');
+    if (!manifestFile) throw new Error('missing manifest');
+    manifestText = await manifestFile.async('string');
+  } catch {
+    throw new Error('This is not a valid .nnote file');
+  }
+  let m: Obj;
+  try { m = asObj(JSON.parse(manifestText)); }
+  catch { throw new Error('This .nnote file is corrupted'); }
   const format = str(m.format, 'nnote');
   if (format !== 'nnote' && format !== 'xnote') throw new Error('Not an Nnotes document');
 

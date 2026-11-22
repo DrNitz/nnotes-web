@@ -561,6 +561,7 @@ export default function App() {
   const [split, setSplit] = useState(false);
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showStudio, setShowStudio] = useState(false);
+  const [busy, setBusy] = useState('');
   const presenting = useEditor((s) => s.presenting);
   const setPresenting = useEditor((s) => s.setPresenting);
   const t = useT();
@@ -601,23 +602,33 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const notifyError = (e: unknown) => {
+    window.dispatchEvent(new CustomEvent('nnotes-toast', {
+      detail: e instanceof Error ? e.message : 'Something went wrong',
+    }));
+  };
+
   const save = async () => {
-    const s = useEditor.getState();
-    const blob = await serializeNNote({ doc: s.doc, assets: s.assets });
-    await saveDocument(s.docId, s.doc.name || 'Untitled', blob);
-    s.markSaved();
-    setRefreshKey((k) => k + 1);
+    try {
+      const s = useEditor.getState();
+      const blob = await serializeNNote({ doc: s.doc, assets: s.assets });
+      await saveDocument(s.docId, s.doc.name || 'Untitled', blob);
+      s.markSaved();
+      setRefreshKey((k) => k + 1);
+    } catch (e) { notifyError(e); }
   };
 
   const exportFile = async () => {
-    const s = useEditor.getState();
-    const blob = await serializeNNote({ doc: s.doc, assets: s.assets });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(s.doc.name || 'Untitled').replace(/[^\w\-]+/g, '_')}.nnote`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    try {
+      const s = useEditor.getState();
+      const blob = await serializeNNote({ doc: s.doc, assets: s.assets });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(s.doc.name || 'Untitled').replace(/[^\w\-]+/g, '_')}.nnote`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) { notifyError(e); }
   };
 
   const requestImage = (rect: [number, number, number, number]) => {
@@ -626,51 +637,65 @@ export default function App() {
   };
 
   const insertImage = async (file: File) => {
-    const rect = pendingImageRect.current ?? [40, 40, 320, 220];
-    const buffer = await file.arrayBuffer();
-    const asset = `assets/image-${Date.now()}.png`;
-    const s = useEditor.getState();
-    const assets = new Map(s.assets);
-    assets.set(asset, new Blob([buffer], { type: file.type || 'image/png' }));
-    s.loadDocument(s.doc, assets, s.docId, s.doc.name);
-    s.addItem(makeImage(rect, asset, 1000, 1000), 'Add image');
-    assetUrl(asset);
-    pendingImageRect.current = null;
+    try {
+      const rect = pendingImageRect.current ?? [40, 40, 320, 220];
+      const buffer = await file.arrayBuffer();
+      const asset = `assets/image-${Date.now()}.png`;
+      const s = useEditor.getState();
+      const assets = new Map(s.assets);
+      assets.set(asset, new Blob([buffer], { type: file.type || 'image/png' }));
+      s.loadDocument(s.doc, assets, s.docId, s.doc.name);
+      s.addItem(makeImage(rect, asset, 1000, 1000), 'Add image');
+      assetUrl(asset);
+      pendingImageRect.current = null;
+    } catch (e) { notifyError(e); }
   };
 
   const importPdfFile = async (file: File) => {
-    const { importPdf } = await import('./lib/pdf');
-    const result = await importPdf(file);
-    const s = useEditor.getState();
-    const assets = new Map(s.assets);
-    result.assets.forEach((v, k) => assets.set(k, v));
-    s.loadDocument({
-      ...s.doc,
-      has_pdf: true,
-      pages: [...s.doc.pages, ...result.pages],
-      bookmarks: [...s.doc.bookmarks, { page: s.doc.pages.length, label: file.name }],
-    }, assets, s.docId, s.doc.name);
-    setSplit(true);
-    setRefreshKey((k) => k + 1);
+    setBusy('Importing PDF…');
+    try {
+      const { importPdf } = await import('./lib/pdf');
+      const result = await importPdf(file);
+      const s = useEditor.getState();
+      const assets = new Map(s.assets);
+      result.assets.forEach((v, k) => assets.set(k, v));
+      s.loadDocument({
+        ...s.doc,
+        has_pdf: true,
+        pages: [...s.doc.pages, ...result.pages],
+        bookmarks: [...s.doc.bookmarks, { page: s.doc.pages.length, label: file.name }],
+      }, assets, s.docId, s.doc.name);
+      setSplit(true);
+      setRefreshKey((k) => k + 1);
+    } catch (e) { notifyError(e); }
+    finally { setBusy(''); }
   };
 
   const exportPdfFile = async () => {
-    const s = useEditor.getState();
-    const blob = s.vectorPdf
-      ? await (await import('./lib/pdfVector')).exportPdfVector(s.doc, s.doc.name || 'Untitled', s.theme)
-      : await (await import('./lib/pdf')).exportPdf(s.doc, s.doc.name || 'Untitled', s.theme);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(s.doc.name || 'Untitled').replace(/[^\w\-]+/g, '_')}.pdf`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setBusy('Exporting PDF…');
+    try {
+      const s = useEditor.getState();
+      const blob = s.vectorPdf
+        ? await (await import('./lib/pdfVector')).exportPdfVector(s.doc, s.doc.name || 'Untitled', s.theme)
+        : await (await import('./lib/pdf')).exportPdf(s.doc, s.doc.name || 'Untitled', s.theme);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(s.doc.name || 'Untitled').replace(/[^\w\-]+/g, '_')}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) { notifyError(e); }
+    finally { setBusy(''); }
   };
 
   const openFile = async (file: File) => {
-    const parsed = await parseNNote(await file.arrayBuffer());
-    const s = useEditor.getState();
-    s.loadDocument(parsed.doc, parsed.assets, s.docId, file.name.replace(/\.nnote$/i, ''));
+    setBusy('Opening note…');
+    try {
+      const parsed = await parseNNote(await file.arrayBuffer());
+      const s = useEditor.getState();
+      s.loadDocument(parsed.doc, parsed.assets, s.docId, file.name.replace(/\.nnote$/i, ''));
+    } catch (e) { notifyError(e); }
+    finally { setBusy(''); }
   };
 
   return (
@@ -718,6 +743,7 @@ export default function App() {
       </div>
       <StatusBar />
       <Toast />
+      {busy && <div className="busy-overlay"><div className="busy-card">{busy}</div></div>}
       {showSwitcher && <DocumentSwitcher onClose={() => { setShowSwitcher(false); setRefreshKey((k) => k + 1); }} />}
       {showStudio && <Studio onClose={() => setShowStudio(false)} />}
     </div>

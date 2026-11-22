@@ -2,6 +2,8 @@
 
 A browser-based port of the **Nnotes Android app canvas** — local-first handwritten notes, PDF markup, and study tools.
 
+**Live demo:** [https://drnitz.com/nnotes-web/](https://drnitz.com/nnotes-web/) — deployed automatically from `main` via GitHub Pages Actions.
+
 > [!IMPORTANT] Strict source-access rule
 > The original Android project at `/home/drnitz/Nnotes` is a **read-only reference**.
 > It is consulted only to extract information about app-canvas features. **No file in

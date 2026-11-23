@@ -19,14 +19,15 @@ function dayKey(d = new Date()) {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
+/** Streak including today: continued from yesterday, reset otherwise. */
 function loadStreak(): number {
   const today = dayKey();
   const last = localStorage.getItem('nnotes-last-active');
-  const streak = Number(localStorage.getItem('nnotes-streak') ?? 0);
-  if (last === today) return streak;
+  const streak = Number(localStorage.getItem('nnotes-streak') ?? 0) || 0;
+  if (last === today) return Math.max(1, streak);
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  return last === dayKey(yesterday) ? streak : 0;
+  return last === dayKey(yesterday) ? streak + 1 : 1;
 }
 
 export function Studio({ onClose }: { onClose: () => void }) {
@@ -48,21 +49,25 @@ export function Studio({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (!running) return;
     interval.current = window.setInterval(() => {
-      setRemaining((r) => {
-        if (r > 1) return r - 1;
-        const next = mode === 'work' ? 'rest' : 'work';
-        setMode(next);
-        setRunning(false);
-        const minutes = next === 'work' ? workMin : restMin;
-        window.dispatchEvent(new CustomEvent('nnotes-toast', { detail: next === 'work' ? 'Break finished — focus again!' : 'Focus block complete — take a break.' }));
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('Nnotes Web', { body: next === 'work' ? 'Break finished — focus again!' : 'Focus block complete — take a break.' });
-        }
-        return minutes * 60;
-      });
+      setRemaining((r) => Math.max(0, r - 1));
     }, 1000);
     return () => { if (interval.current) window.clearInterval(interval.current); };
-  }, [running, mode, workMin, restMin]);
+  }, [running]);
+
+  // Transition in an effect rather than inside the state updater: updaters must stay pure,
+  // and StrictMode invokes them twice (which used to double-fire the notification).
+  useEffect(() => {
+    if (remaining !== 0) return;
+    const next = mode === 'work' ? 'rest' : 'work';
+    const message = next === 'work' ? 'Break finished — focus again!' : 'Focus block complete — take a break.';
+    setMode(next);
+    setRunning(false);
+    setRemaining((next === 'work' ? workMin : restMin) * 60);
+    window.dispatchEvent(new CustomEvent('nnotes-toast', { detail: message }));
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('Nnotes Web', { body: message });
+    }
+  }, [remaining, mode, workMin, restMin]);
 
   const reset = (m: 'work' | 'rest', minutes: number) => {
     setMode(m);

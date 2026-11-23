@@ -35,6 +35,8 @@ export interface RenderInput {
   /** In-progress drag preview, drawn without committing to history on every frame. */
   overrideItems?: CanvasItem[] | null;
   useCache?: boolean;
+  /** Set false to leave the app background transparent (e.g. paper-only PDF export). */
+  background?: boolean;
   ruler?: { visible: boolean; y: number; angle: number; locked: boolean };
   liveShape?: ShapeItem | null;
   liveRect?: Rect | null;
@@ -504,15 +506,13 @@ function drawAudioClip(ctx: CanvasRenderingContext2D, item: AudioClipItem) {
 }
 
 function drawItem(ctx: CanvasRenderingContext2D, item: CanvasItem, assetUrl: (name: string) => string | undefined) {
-  if (item.rotation) {
-    const b = itemBounds(item);
-    if (b) {
-      const cx = b[0] + b[2] / 2, cy = b[1] + b[3] / 2;
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate((item.rotation * Math.PI) / 180);
-      ctx.translate(-cx, -cy);
-    }
+  const rotatedBounds = item.rotation ? itemBounds(item) : null;
+  if (rotatedBounds) {
+    const cx = rotatedBounds[0] + rotatedBounds[2] / 2, cy = rotatedBounds[1] + rotatedBounds[3] / 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate((item.rotation! * Math.PI) / 180);
+    ctx.translate(-cx, -cy);
   }
   switch (item.kind) {
     case 'stroke': drawStroke(ctx, item, false); break;
@@ -526,7 +526,7 @@ function drawItem(ctx: CanvasRenderingContext2D, item: CanvasItem, assetUrl: (na
     case 'audio_clip': drawAudioClip(ctx, item); break;
     case 'group': (item as GroupItem).items.forEach((child) => drawItem(ctx, child, assetUrl)); break;
   }
-  if (item.rotation && itemBounds(item)) ctx.restore();
+  if (rotatedBounds) ctx.restore();
 }
 
 export function itemBounds(item: CanvasItem): Rect | null {
@@ -562,8 +562,10 @@ export function renderScene(input: RenderInput): void {
   const palette = PALETTES[theme];
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = palette.bg;
-  ctx.fillRect(0, 0, width, height);
+  if (input.background !== false) {
+    ctx.fillStyle = palette.bg;
+    ctx.fillRect(0, 0, width, height);
+  }
 
   const page = doc.pages[pageIndex];
   if (!page) return;
@@ -595,7 +597,7 @@ export function renderScene(input: RenderInput): void {
     // Quantise the scale so pinch-zoom doesn't rebuild the cache on every frame.
     const rawScale = Math.min(2, Math.max(1, zoom * dpr));
     const scale = Math.round(rawScale * 4) / 4;
-    const key = `${pageIndex}|${scale}|${theme}|${page.uid}`;
+    const key = `${pageIndex}|${scale}|${theme}|${page.uid}|${page.pdf_asset ?? ''}`;
     const cached = pageCache.get(doc.pages, key, () => {
       const off = document.createElement('canvas');
       off.width = Math.max(1, Math.ceil(page.width * scale));

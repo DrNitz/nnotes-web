@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   CanvasItem, EditorTool, NNoteDocument, Page, Rgba, ShapeKind, StickyStyle, TapePattern, ToolConfig,
 } from '../types/model';
-import { A4, blankDocument, uid } from '../types/model';
+import { blankDocument, blankPage, uid } from '../types/model';
 import { DEFAULT_INK, normalizeConfig } from '../lib/toolDefaults';
 
 export type ThemeMode = 'light' | 'dark' | 'oled';
@@ -68,6 +68,7 @@ export interface EditorState {
   setEditingUid: (uid: string | null) => void;
   setSelection: (ids: string[]) => void;
   commit: (label: string, mutate: (pages: Page[]) => void) => void;
+  addAssets: (entries: Map<string, Blob>) => void;
   addItem: (item: CanvasItem, label?: string) => void;
   replacePageItems: (items: CanvasItem[], label?: string) => void;
   undo: () => void;
@@ -124,22 +125,16 @@ export const useEditor = create<EditorState>()((set, get) => ({
     pageIndex: Math.max(0, Math.min(s.doc.pages.length - 1, index)),
     selection: [],
   })),
-  addPage: () => set((s) => ({
-    doc: { ...s.doc, pages: [...s.doc.pages, {
-      width: A4.width,
-      height: A4.height,
-      pdf_page: null,
-      items: [],
-      uid: uid(),
-    }] },
-    pageIndex: s.doc.pages.length,
-    dirty: true,
-  })),
-  deletePage: (index) => set((s) => {
-    if (s.doc.pages.length <= 1) return s;
-    const pages = s.doc.pages.filter((_, i) => i !== index);
-    return { doc: { ...s.doc, pages }, pageIndex: Math.min(s.pageIndex, pages.length - 1), dirty: true };
-  }),
+  addPage: () => {
+    const nextIndex = get().doc.pages.length;
+    get().commit('Add page', (pages) => { pages.push(blankPage()); });
+    set({ pageIndex: nextIndex });
+  },
+  deletePage: (index) => {
+    if (get().doc.pages.length <= 1) return;
+    get().commit('Delete page', (pages) => { if (pages[index]) pages.splice(index, 1); });
+    set((s) => ({ pageIndex: Math.min(s.pageIndex, s.doc.pages.length - 1) }));
+  },
 
   setZoom: (zoom, anchor) => set((s) => {
     const next = Math.min(16, Math.max(0.12, zoom));
@@ -182,6 +177,11 @@ export const useEditor = create<EditorState>()((set, get) => ({
     };
   }),
 
+  addAssets: (entries) => set((s) => ({
+    assets: new Map([...s.assets, ...entries]),
+    dirty: true,
+  })),
+
   addItem: (item, label = 'Add') => get().commit(label, (pages) => {
     const page = pages[get().pageIndex];
     if (page) page.items.push(item);
@@ -199,6 +199,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
       doc: { ...s.doc, pages: snap.pages },
       history: s.history.slice(0, -1),
       future: [...s.future, { pages: clonePages(s.doc.pages), label: snap.label }],
+      pageIndex: Math.min(s.pageIndex, snap.pages.length - 1),
       selection: [],
       dirty: true,
     };
@@ -211,6 +212,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
       doc: { ...s.doc, pages: snap.pages },
       future: s.future.slice(0, -1),
       history: [...s.history, { pages: clonePages(s.doc.pages), label: snap.label }].slice(-HISTORY_LIMIT),
+      pageIndex: Math.min(s.pageIndex, snap.pages.length - 1),
       selection: [],
       dirty: true,
     };
@@ -252,11 +254,13 @@ export function currentPage(s: EditorState): Page | undefined {
   return s.doc.pages[s.pageIndex];
 }
 
-const urlCache = new Map<string, string>();
+// Keyed by the blob itself so reopening a document (which replaces the asset map)
+// never hands back a URL that points at the previous document's bytes.
+const urlCache = new WeakMap<Blob, string>();
 export function assetUrl(name: string): string | undefined {
   const blob = useEditor.getState().assets.get(name);
   if (!blob) return undefined;
-  let url = urlCache.get(name);
-  if (!url) { url = URL.createObjectURL(blob); urlCache.set(name, url); }
+  let url = urlCache.get(blob);
+  if (!url) { url = URL.createObjectURL(blob); urlCache.set(blob, url); }
   return url;
 }

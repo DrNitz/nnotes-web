@@ -13,9 +13,10 @@ export function ObjectEditor() {
   const theme = useEditor((s) => s.theme);
   const commit = useEditor((s) => s.commit);
   const setEditingUid = useEditor((s) => s.setEditingUid);
-  const [draft, setDraft] = useState('');
+  // `null` means "not edited yet" — an empty string is a real value so text can be cleared.
+  const [draft, setDraft] = useState<string | null>(null);
 
-  useEffect(() => { setDraft(''); }, [editingUid]);
+  useEffect(() => { setDraft(null); }, [editingUid]);
 
   if (!item || !editingUid) return null;
   const bounds = itemBounds(item);
@@ -32,11 +33,16 @@ export function ObjectEditor() {
     });
   };
 
-  const close = () => { if (draft) save(applyDraft); setEditingUid(null); };
+  const original = item.kind === 'text' || item.kind === 'sticky_note' ? item.text : '';
+  const text = draft ?? original;
+  const close = () => {
+    if (draft !== null && draft !== original) save(applyDraft);
+    setDraft(null);
+    setEditingUid(null);
+  };
 
   function applyDraft(copy: CanvasItem) {
-    if (copy.kind === 'text') copy.text = draft;
-    else if (copy.kind === 'sticky_note') copy.text = draft;
+    if (copy.kind === 'text' || copy.kind === 'sticky_note') copy.text = draft ?? '';
   }
 
   const style = {
@@ -55,17 +61,11 @@ export function ObjectEditor() {
       <textarea
         autoFocus
         style={style}
-        value={draft || item.text}
+        value={text}
         placeholder={item.kind === 'sticky_note' ? 'Write a note…' : 'Type here…'}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={close}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            if (draft) save(applyDraft);
-            setDraft('');
-            setEditingUid(null);
-          }
-        }}
+        onKeyDown={(e) => { if (e.key === 'Escape') close(); }}
       />
     );
   }

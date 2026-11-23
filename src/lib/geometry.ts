@@ -51,8 +51,9 @@ export function rgbaCss(c: Rgba, alpha = 1): string {
 }
 
 export function hexToRgba(hex: string): Rgba {
-  const h = hex.replace('#', '');
+  const h = hex.replace('#', '').trim();
   const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return [0, 0, 0, 255];
   return [parseInt(full.slice(0, 2), 16), parseInt(full.slice(2, 4), 16), parseInt(full.slice(4, 6), 16), 255];
 }
 

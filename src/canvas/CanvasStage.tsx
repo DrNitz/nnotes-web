@@ -75,6 +75,8 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
   const startBounds = useRef<Rect>([0, 0, 1, 1]);
   const rotateStart = useRef(0);
   const rulerStart = useRef({ y: 0, angle: 0 });
+  /** True once a drag has actually changed pixels, so no-op clicks create no history entry. */
+  const dragMoved = useRef(false);
 
   const requestRender = useCallback(() => requestAnimationFrame(() => renderRef.current()), []);
   const fadeLoop = useRef<() => void>(() => {});
@@ -112,6 +114,18 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     };
     const ro = new ResizeObserver(resize);
     if (wrapRef.current) ro.observe(wrapRef.current);
+    // React registers wheel handlers as passive, so preventDefault has to be attached
+    // natively or the page scrolls while pinch/wheel zooming.
+    const canvas = canvasRef.current;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (!canvas) return;
+      const p = localPoint(canvas, e);
+      const s = useEditor.getState();
+      // The store subscription repaints, so no extra frame is requested here.
+      s.setZoom(s.zoom * Math.exp(-e.deltaY * (e.ctrlKey || e.metaKey ? 0.01 : 0.0015)), p);
+    };
+    canvas?.addEventListener('wheel', onWheel, { passive: false });
     const onAssetLoaded = () => { pageCache.clear(); render(); };
     window.addEventListener('nnotes-asset-loaded', onAssetLoaded);
     let fadeRaf = 0;
@@ -131,6 +145,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     return () => {
       unsub(); ro.disconnect(); cancelAnimationFrame(fadeRaf);
       window.removeEventListener('nnotes-asset-loaded', onAssetLoaded);
+      canvas?.removeEventListener('wheel', onWheel);
     };
   }, []);
 
@@ -173,12 +188,18 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     }
   };
 
-  const applyErase = (c: Pt, radiusOverride?: number) => {
+  /** Eraser radius in page-content units (constant on screen when `scale === false`). */
+  const eraserRadius = (s: EditorState) => {
+    const cfg = s.configFor('eraser');
+    return cfg.scale === false ? cfg.base_width / s.zoom : cfg.base_width;
+  };
+
+  const applyErase = (c: Pt, radiusOverride?: number): boolean => {
     const s = useEditor.getState();
     const source = liveItems.current ?? s.doc.pages[s.pageIndex]?.items;
-    if (!source) return;
+    if (!source) return false;
     const cfg = s.configFor('eraser');
-    const radius = radiusOverride ?? cfg.base_width / (cfg.scale === false ? s.zoom : 1);
+    const radius = radiusOverride ?? eraserRadius(s);
     const eraseMode = cfg.erase_mode ?? 'area';
     const items: CanvasItem[] = [];
     let changed = false;
@@ -197,11 +218,14 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       }
     }
     if (changed) liveItems.current = items;
+    return changed;
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.button === 2) return;
     const el = canvasRef.current!;
     try { el.setPointerCapture(e.pointerId); } catch { /* synthetic or already-released pointer */ }
+    dragMoved.current = false;
     const p = localPoint(el, e);
     pointers.current.set(e.pointerId, p);
     const s = useEditor.getState();
@@ -240,8 +264,8 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       mode.current = 'erase';
       liveItems.current = structuredClone(s.doc.pages[s.pageIndex]?.items ?? []);
       eraseSet.current = new Set();
-      eraserCursor.current = { x: c[0], y: c[1], radius: s.configFor('eraser').base_width };
-      applyErase(c);
+      eraserCursor.current = { x: c[0], y: c[1], radius: eraserRadius(s) };
+      dragMoved.current = applyErase(c);
       return;
     }
 
@@ -313,7 +337,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
         mode.current = 'scribble';
         liveItems.current = structuredClone(s.doc.pages[s.pageIndex]?.items ?? []);
         eraseSet.current = new Set();
-        applyErase(c, 8 / s.zoom);
+        dragMoved.current = applyErase(c, 8 / s.zoom);
         return;
       }
       const config = structuredClone(s.configFor(s.tool as never));
@@ -368,10 +392,13 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       lastSample.current = cRaw;
       return;
     }
-    if (mode.current === 'scribble') { applyErase(c, 8 / s.zoom); return; }
+    if (mode.current === 'scribble') {
+      dragMoved.current = applyErase(c, 8 / s.zoom) || dragMoved.current;
+      return;
+    }
     if (mode.current === 'erase') {
-      eraserCursor.current = { x: c[0], y: c[1], radius: s.configFor('eraser').base_width };
-      applyErase(c);
+      eraserCursor.current = { x: c[0], y: c[1], radius: eraserRadius(s) };
+      dragMoved.current = applyErase(c) || dragMoved.current;
       return;
     }
     if (mode.current === 'place-shape' && liveShape.current) {
@@ -388,6 +415,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     }
     if (mode.current === 'move') {
       const dx = c[0] - startContent.current[0], dy = c[1] - startContent.current[1];
+      if (dx || dy) dragMoved.current = true;
       const page = s.doc.pages[s.pageIndex];
       if (!page) return;
       const items = (liveItems.current ?? page.items).map((it) => {
@@ -401,6 +429,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       return;
     }
     if (mode.current === 'resize') {
+      dragMoved.current = true;
       const [x, y, w, h] = startBounds.current;
       const anchor: Pt = [x + w / 2, y + h / 2];
       const sx = Math.max(0.05, activeHandle.current.includes('l') ? (x + w - c[0]) / w : activeHandle.current.includes('r') ? (c[0] - x) / w : 1);
@@ -419,6 +448,7 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
       return;
     }
     if (mode.current === 'rotate') {
+      dragMoved.current = true;
       const page = s.doc.pages[s.pageIndex];
       if (!page || !originals.current.size) return;
       const center = toScreen(s, itemCenter([...originals.current.values()][0]));
@@ -447,8 +477,9 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     const p = localPoint(canvasRef.current!, e);
     const c = content(p);
 
-    // One history entry per drag — no structuredClone on every pointer move.
-    if (liveItems.current && ['erase', 'scribble', 'move', 'resize', 'rotate'].includes(mode.current)) {
+    // One history entry per drag — no structuredClone on every pointer move, and no
+    // entry at all when the drag did not change anything.
+    if (dragMoved.current && liveItems.current && ['erase', 'scribble', 'move', 'resize', 'rotate'].includes(mode.current)) {
       const items = liveItems.current;
       const label = mode.current === 'move' ? 'Move'
         : mode.current === 'resize' ? 'Resize'
@@ -560,13 +591,6 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
     if (pointers.current.size < 2) { pinch.current = null; mode.current = 'idle'; }
   };
 
-  const onWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const p = localPoint(canvasRef.current!, e);
-    const s = useEditor.getState();
-    s.setZoom(s.zoom * Math.exp(-e.deltaY * (e.ctrlKey || e.metaKey ? 0.01 : 0.0015)), p);
-  };
-
   // Avoid redrawing on every hover — only when a tool is actively modifying the canvas.
   const withRender = (fn: (e: React.PointerEvent<HTMLCanvasElement>) => void) =>
     (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -585,7 +609,6 @@ export function CanvasStage({ onRequestImage }: { onRequestImage: (rect: Rect) =
         onPointerMove={withRender(onPointerMove)}
         onPointerUp={withRender(onPointerUp)}
         onPointerCancel={withRender(onPointerUp)}
-        onWheel={(e) => { onWheel(e); requestRender(); }}
         onContextMenu={(e) => e.preventDefault()}
       />
     </div>

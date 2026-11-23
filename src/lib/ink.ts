@@ -239,9 +239,16 @@ export function buildStrokeGeometry(samples: StrokeSample[], c: ToolConfig, opts
   return { outline: outline.length >= 3 ? outline : [], centerline: centers, halfWidths };
 }
 
+// Built paths are immutable and geometry objects are shared by the renderer's cache, so
+// building each Path2D once keeps pan/zoom/selection redraws from re-walking every sample.
+const strokePathCache = new WeakMap<StrokeGeometry, Path2D>();
+const centerlinePathCache = new WeakMap<StrokeGeometry, Path2D>();
+
 /** Outline polygon plus a swept disc at every sample (round caps and joins). */
 export function strokePath(g: StrokeGeometry): Path2D {
-  const path = new Path2D();
+  let path = strokePathCache.get(g);
+  if (path) return path;
+  path = new Path2D();
   if (g.outline.length >= 3) {
     path.moveTo(g.outline[0][0], g.outline[0][1]);
     for (let i = 1; i < g.outline.length; i++) path.lineTo(g.outline[i][0], g.outline[i][1]);
@@ -252,14 +259,16 @@ export function strokePath(g: StrokeGeometry): Path2D {
     path.moveTo(x + g.halfWidths[i], y);
     path.arc(x, y, g.halfWidths[i], 0, Math.PI * 2);
   }
+  strokePathCache.set(g, path);
   return path;
 }
 
-export function centerlinePath(g: StrokeGeometry, dashLength = 10, dashGap = 8): Path2D {
-  const path = new Path2D();
+export function centerlinePath(g: StrokeGeometry): Path2D {
+  let path = centerlinePathCache.get(g);
+  if (path) return path;
+  path = new Path2D();
   if (g.centerline.length) path.moveTo(g.centerline[0][0], g.centerline[0][1]);
   for (let i = 1; i < g.centerline.length; i++) path.lineTo(g.centerline[i][0], g.centerline[i][1]);
-  void dashLength;
-  void dashGap;
+  centerlinePathCache.set(g, path);
   return path;
 }

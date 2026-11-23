@@ -70,9 +70,11 @@ export async function exportPdf(doc: NNoteDocument, name: string, theme: 'light'
     renderScene({
       ctx, width: canvas.width, height: canvas.height, dpr: scale,
       doc, pageIndex: i, zoom: 1, origin: { x: 0, y: 0 }, theme,
-      selection: [], assetUrl, useCache: false, ruler: { visible: false, y: 0, angle: 0, locked: false },
+      selection: [], assetUrl, useCache: false, background: false,
+      ruler: { visible: false, y: 0, angle: 0, locked: false },
     });
-    // Repaint without the app background so exported pages are paper-only.
+    // With the app background skipped above, fill paper *behind* the page art so the
+    // export never carries the dark editor background.
     ctx.fillStyle = palette.paper;
     ctx.globalCompositeOperation = 'destination-over';
     ctx.fillRect(0, 0, canvas.width, canvas.height);

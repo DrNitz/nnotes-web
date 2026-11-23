@@ -10,7 +10,7 @@ import type { CanvasItem, EditorTool, ShapeKind, StickyStyle, TapePattern, ToolC
 import { hexToRgba, rgbaToHex } from './lib/geometry';
 import { normalizeConfig } from './lib/toolDefaults';
 import { beautifySelected } from './lib/beautify';
-import { cloneItem, makeAudioClip, makeGroup, makeImage } from './lib/items';
+import { cloneItem, makeAudioClip, makeGroup, makeImage, translateItem } from './lib/items';
 import { VoiceRecorder } from './lib/voice';
 import { assetUrl } from './store/editor';
 import { parseNNote, serializeNNote } from './lib/nnote';
@@ -182,9 +182,7 @@ function ToolPanel() {
     setRecording(false);
     const s = useEditor.getState();
     const asset = `assets/audio-${Date.now()}.webm`;
-    const assets = new Map(s.assets);
-    assets.set(asset, blob);
-    s.loadDocument(s.doc, assets, s.docId, s.doc.name);
+    s.addAssets(new Map([[asset, blob]]));
     const host = document.querySelector('.canvas-wrap')?.getBoundingClientRect();
     const center: [number, number] = [
       (-s.origin.x + (host?.width ?? 800) / 2) / s.zoom,
@@ -235,7 +233,12 @@ function ToolPanel() {
           <label className="hex-field">
             <span>HEX</span>
             <input value={rgbaToHex(config.rgba)} onChange={(e) => {
-              try { const c = hexToRgba(e.target.value); setInk(c); patch({ rgba: c }); } catch { /* ignore partial input */ }
+              // Only commit complete 3/6-digit hex values so partially typed input can't
+              // store NaN channels in the tool config.
+              if (!/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.test(e.target.value.trim())) return;
+              const c = hexToRgba(e.target.value);
+              setInk(c);
+              patch({ rgba: c });
             }} />
           </label>
           <label className="slider-field">
@@ -435,8 +438,12 @@ function SelectionBar() {
       <span>{selection.length} {t('selected')}</span>
       <button title={t('duplicate')} onClick={() => {
         mutate('Duplicate', (items) => {
-          const copies = items.filter((i) => selection.includes(i.uid)).map((i) => { const c = cloneItem(i); c.rotation = i.rotation; return c; });
-          copies.forEach((c) => { if (c.kind === 'stroke') c.samples = c.samples.map((s) => [s[0] + 24, s[1] + 24, s[2], ...(s.length > 3 ? [s[3]] : [])] as typeof s); else if ('rect' in c) c.rect = [c.rect[0] + 24, c.rect[1] + 24, c.rect[2], c.rect[3]]; else if ('pos' in c) c.pos = [c.pos[0] + 24, c.pos[1] + 24]; });
+          const copies = items.filter((i) => selection.includes(i.uid)).map((i) => {
+            const c = cloneItem(i);
+            c.rotation = i.rotation;
+            translateItem(c, 24, 24);
+            return c;
+          });
           items.push(...copies);
         });
         setSelection([]);
@@ -576,22 +583,28 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable) return;
       const s = useEditor.getState();
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) s.redo(); else s.undo();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
         e.preventDefault();
-        const copies = (s.doc.pages[s.pageIndex]?.items ?? []).filter((i) => s.selection.includes(i.uid)).map((i) => cloneItem(i));
-        copies.forEach((c) => { if (c.kind === 'stroke') c.samples = c.samples.map((sm) => [sm[0] + 24, sm[1] + 24, sm[2], ...(sm.length > 3 ? [sm[3]] : [])] as typeof sm); });
+        const copies = (s.doc.pages[s.pageIndex]?.items ?? []).filter((i) => s.selection.includes(i.uid)).map((i) => {
+          const c = cloneItem(i);
+          translateItem(c, 24, 24);
+          return c;
+        });
         if (copies.length) s.commit('Duplicate', (pages) => { pages[s.pageIndex]?.items.push(...copies); });
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         const ids = s.selection;
-        if (ids.length) s.commit('Delete', (pages) => {
-          const page = pages[s.pageIndex];
-          if (page) page.items = page.items.filter((i) => !ids.includes(i.uid));
-        });
+        if (ids.length) {
+          s.commit('Delete', (pages) => {
+            const page = pages[s.pageIndex];
+            if (page) page.items = page.items.filter((i) => !ids.includes(i.uid));
+          });
+          s.setSelection([]);
+        }
       } else if (e.key === 'Escape') {
         if (s.presenting) togglePresent();
         s.setSelection([]);
@@ -642,9 +655,7 @@ export default function App() {
       const buffer = await file.arrayBuffer();
       const asset = `assets/image-${Date.now()}.png`;
       const s = useEditor.getState();
-      const assets = new Map(s.assets);
-      assets.set(asset, new Blob([buffer], { type: file.type || 'image/png' }));
-      s.loadDocument(s.doc, assets, s.docId, s.doc.name);
+      s.addAssets(new Map([[asset, new Blob([buffer], { type: file.type || 'image/png' })]]));
       s.addItem(makeImage(rect, asset, 1000, 1000), 'Add image');
       assetUrl(asset);
       pendingImageRect.current = null;
@@ -659,12 +670,14 @@ export default function App() {
       const s = useEditor.getState();
       const assets = new Map(s.assets);
       result.assets.forEach((v, k) => assets.set(k, v));
+      const firstNewPage = s.doc.pages.length;
       s.loadDocument({
         ...s.doc,
         has_pdf: true,
         pages: [...s.doc.pages, ...result.pages],
-        bookmarks: [...s.doc.bookmarks, { page: s.doc.pages.length, label: file.name }],
+        bookmarks: [...s.doc.bookmarks, { page: firstNewPage, label: file.name }],
       }, assets, s.docId, s.doc.name);
+      useEditor.getState().setPage(firstNewPage);
       setSplit(true);
       setRefreshKey((k) => k + 1);
     } catch (e) { notifyError(e); }

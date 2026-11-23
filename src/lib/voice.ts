@@ -1,10 +1,20 @@
 /** Browser voice capture with optional live transcription via the Web Speech API. */
 
+interface SpeechResult {
+  isFinal?: boolean;
+  readonly 0: { transcript: string };
+}
+
+interface SpeechResultEvent {
+  resultIndex?: number;
+  results: ArrayLike<SpeechResult>;
+}
+
 interface SpeechLike {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onresult: ((e: SpeechResultEvent) => void) | null;
   start: () => void;
   stop: () => void;
 }
@@ -42,9 +52,13 @@ export class VoiceRecorder {
       this.speech.lang = navigator.language || 'en-US';
       this.speech.continuous = true;
       this.speech.interimResults = false;
+      // Results is cumulative: start at resultIndex so earlier final phrases are not
+      // appended twice, and skip interim results until they are finalized.
       this.speech.onresult = (e) => {
-        for (let i = 0; i < e.results.length; i++) {
-          this.transcript += `${e.results[i][0].transcript} `;
+        for (let i = e.resultIndex ?? 0; i < e.results.length; i++) {
+          const result = e.results[i];
+          if (result.isFinal === false) continue;
+          this.transcript += `${result[0].transcript} `;
         }
       };
       try { this.speech.start(); } catch { this.speech = null; }
